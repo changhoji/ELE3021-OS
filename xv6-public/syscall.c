@@ -104,6 +104,12 @@ extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
 
+extern int sys_yield(void);
+extern int sys_getLevel(void);
+extern int sys_setPriority(void);
+extern int sys_lock(void);
+extern int sys_unlock(void);
+
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
 [SYS_exit]    sys_exit,
@@ -126,6 +132,11 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_yield]   sys_yield,
+[SYS_getLevel]  sys_getLevel,
+[SYS_setPriority]   sys_setPriority,
+[SYS_lock]    sys_lock,
+[SYS_unlock]  sys_unlock
 };
 
 void

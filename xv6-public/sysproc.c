@@ -98,13 +98,13 @@ sys_yield(void)
 }
 
 int
-sys_getlvl(void)
+sys_getLevel(void)
 {
   return getLevel();
 }
 
 int
-sys_setpr(void)
+sys_setPriority(void)
 {
   int pid, priority;
 

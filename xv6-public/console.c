@@ -237,7 +237,6 @@ consoleread(struct inode *ip, char *dst, int n)
 {
   uint target;
   int c;
-  cprintf("level = %d\n", getLevel());
 
   iunlock(ip);
   target = n;
