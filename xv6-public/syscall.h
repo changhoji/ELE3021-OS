@@ -20,3 +20,11 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
+
+
+// append new syscalls
+#define SYS_yield  22
+#define SYS_getlvl 23
+#define SYS_setpr  24
+#define SYS_lock   25
+#define SYS_unlock 26

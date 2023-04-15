@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "mlfq.h"
 
 struct {
   struct spinlock lock;
@@ -17,6 +18,7 @@ static struct proc *initproc;
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
+extern struct mlfq mlfq;
 
 static void wakeup1(void *chan);
 
@@ -88,6 +90,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->priority = 3; // set to 3 in first
 
   release(&ptable.lock);
 
@@ -531,4 +534,40 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+// Get level of queue where the process is in
+int
+getLevel(void)
+{
+  struct proc *p = myproc();
+
+  return p->priority;
+}
+
+// Set priority of the process whose pid is pid
+void
+setPriority(int pid, int priority)
+{
+  struct proc *p;
+  
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if (p->pid == pid){
+      p->priority = priority;
+    }
+  }
+}
+
+// Lock mlfq scheduler
+void
+schedulerLock(int password)
+{
+  mlfq.locked = 1;
+}
+
+// Unlock mlfq scheduler
+void
+schedulerUnlock(int password)
+{
+  mlfq.locked = 0;
 }
