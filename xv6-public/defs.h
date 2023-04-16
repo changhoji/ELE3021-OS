@@ -197,6 +197,6 @@ void            clearpteu(pde_t *pgdir, char *uva);
 // mlfq.c
 void            mlfqinit(void);
 void            enqueue(struct queue*, struct proc*);
-void            dequeue(struct queue*, struct proc*);
-void            mlfqscheduler(void);
+void            dequeue(struct queue*);
+void            mlfqscheduler(void) __attribute__((noreturn));
 void            priorityboosting(void);

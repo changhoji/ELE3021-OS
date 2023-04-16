@@ -1,13 +1,7 @@
-#include "types.h"
-#include "defs.h"
-#include "param.h"
-#include "memlayout.h"
-#include "mmu.h"
-#include "x86.h"
-#include "proc.h"
-#include "mlfq.h"
+
 
 struct mlfq mlfq;
+
 
 // Init MultiLevel Feedback Queue
 void
@@ -57,6 +51,18 @@ struct proc* front(struct queue* q)
 void
 mlfqscheduler(void)
 {
+  // struct proc *p;
+  struct cpu *c = mycpu();
+  c->proc = 0;
+
+  for(;;){
+    sti();
+
+    acquire(&ptable.lock);
+    
+
+    
+  }
 }
 
 // Execute priority boosting
