@@ -690,6 +690,9 @@ mlfqscheduler(void)
         p->usedtime = 0;
         enqueue(&ptable.L[1], p);
       }
+
+      runned = 1;
+      break;
     }
     // if runned, re-run scheduler
     if (runned){
@@ -732,6 +735,9 @@ mlfqscheduler(void)
         p->usedtime = 0;
         enqueue(&ptable.L[2], p);
       }
+
+      runned = 1;
+      break;
     }
 
     if (runned){
@@ -741,6 +747,24 @@ mlfqscheduler(void)
 
     // scheduling in L2
 
+    for(i = 0; i < ptable.L[2].size; i++){
+      p = ptable.L[2].procs[i];
+      if(p->state != RUNNABLE){
+        continue;
+      }
+
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      c->proc = 0;
+
+      break;
+    }
+    
 
     release(&ptable.lock);
   }
