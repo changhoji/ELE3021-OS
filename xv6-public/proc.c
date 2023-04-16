@@ -566,7 +566,7 @@ getLevel(void)
 {
   struct proc *p = myproc();
 
-  return p->priority;
+  return p->level;
 }
 
 // Set priority of the process whose pid is pid
@@ -638,8 +638,8 @@ struct proc* front(struct queue* q)
 void
 mlfqscheduler(void)
 {
-  // int i;
-  // int isrunnable = 1;
+  int i;
+  int runned;
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
@@ -651,27 +651,97 @@ mlfqscheduler(void)
 
     acquire(&ptable.lock);
 
-    p = ptable.L[0].procs[0];
+    // scheduling in L0
 
-    if(p->state != RUNNABLE){
-      dequeue(&(ptable.L[0]));
-      enqueue(&(ptable.L[0]), p);
+    runned = 0; // check in L0 if a process worked
+    for(i = 0; i < ptable.L[0].size; i++){
+      p = front(&ptable.L[0]); // get front of queue
+
+      // if the process is non runnable, dequeue and enqueue
+      if(p->state != RUNNABLE){
+        dequeue(&ptable.L[0]);
+        if(p->state != ZOMBIE && p->state != UNUSED) //when zombie or unused, don't enqueue again
+          enqueue(&ptable.L[0], p);
+  
+        continue;
+      }
+
+      // perfome context switching
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      c->proc = 0;
+
+      // increase usedtime
+      p->usedtime++;
+
+      dequeue(&ptable.L[0]);
+
+      // enqueue again if there is more time to can use,
+      // else enqueue in next queue
+      if(p->usedtime < ptable.L[0].timequantum)
+        enqueue(&ptable.L[0], p);
+      else{
+        p->level = 1;
+        p->usedtime = 0;
+        enqueue(&ptable.L[1], p);
+      }
+    }
+    // if runned, re-run scheduler
+    if (runned){
       release(&ptable.lock);
       continue;
     }
 
-    c->proc = p;
-    switchuvm(p);
-    p->state = RUNNING;
+    // scheduling in L1
 
-    swtch(&(c->scheduler), p->context);
-    switchkvm();
+    runned = 0;
+    for(i = 0; i < ptable.L[1].size; i++){
+      p = front(&ptable.L[1]);
 
-    c->proc = 0;
+      if(p->state  != RUNNABLE){
+        dequeue(&ptable.L[1]);
+        if(p->state != ZOMBIE && p->state != UNUSED)
+          enqueue(&ptable.L[1], p);
 
-    dequeue(&(ptable.L[0]));
-    enqueue(&(ptable.L[0]), p);
-    
+        continue;
+      }
+
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      c->proc = 0;
+      
+      // increase usedtime
+      p->usedtime++;
+
+      dequeue(&ptable.L[1]);
+
+      if(p->usedtime < ptable.L[0].timequantum)
+        enqueue(&ptable.L[1], p);
+      else{
+        p->level = 2;
+        p->usedtime = 0;
+        enqueue(&ptable.L[2], p);
+      }
+    }
+
+    if (runned){
+      release(&ptable.lock);
+      continue;
+    }
+
+    // scheduling in L2
+
+
     release(&ptable.lock);
   }
 }
