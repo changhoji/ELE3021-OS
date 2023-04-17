@@ -583,14 +583,36 @@ setPriority(int pid, int priority)
 void
 schedulerLock(int password)
 {
+  struct proc *p = myproc();
+
+  if(password == PASSWORD){
+    cprintf("invalid password in schedulerLock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
+    exit();
+  }
+
+  acquire(&ptable.lock);
+
   ptable.disabled = 1;
+
+  release(&ptable.lock);
 }
 
 // Unlock mlfq scheduler
 void
 schedulerUnlock(int password)
 {
+  struct proc *p = myproc();
+
+  if(password == PASSWORD){
+    cprintf("invalid password in schedulerLock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
+    exit();
+  }
+
+  acquire(&ptable.lock);
+
   ptable.disabled = 0;
+
+  release(&ptable.lock);
 }
 
 
@@ -664,9 +686,11 @@ mlfqscheduler(void)
   for(;;){
     sti();
 
-    // printqueue(&(ptable.L[0]));
 
     acquire(&ptable.lock);
+
+    // if(!(ticks%100))
+    //   printqueue(&(ptable.L[0]));
 
     // scheduling in L0
 
@@ -792,6 +816,8 @@ mlfqscheduler(void)
         continue;
       }
 
+      // cprintf("pid: %d\n", p->pid);
+
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
@@ -824,11 +850,12 @@ priorityboosting(void)
   acquire(&ptable.lock);
   for(i = 0; i < 3; i++){
     for(s = 0; s < ptable.L[i].size; s++){
-      p = ptable.L[i].procs[s];
+      p = ptable.L[i].procs[0];
       p->priority = 3;
       p->usedtime = 0;
+      p->level = 0;
       if(i != 0){ // in L0 queue
-        dequeue(&ptable.L[i]);
+        dequeue(&ptable.L[i]);  
         enqueue(&ptable.L[0], p);
       }
     }
@@ -838,10 +865,7 @@ priorityboosting(void)
 
 void 
 printqueue(struct queue* q){
-  struct proc *p;
-  for(int i = 0; i < q->size; i++){
-    p = q->procs[i];
-    cprintf("i: %d, name: %s, pid: %d\n", i, p->name, p->pid);
-  }
+  
+  
   cprintf("\n");
 }

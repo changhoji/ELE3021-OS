@@ -54,11 +54,12 @@ trap(struct trapframe *tf)
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
       acquire(&tickslock);
-      ticks++;
-      wakeup(&ticks);
-      if(ticks%100 == 0){
+      ticks = (ticks+1)%100;
+
+      if(ticks == 0)
         priorityboosting();
-      }
+
+      wakeup(&ticks);
       release(&tickslock);
     }
     lapiceoi();
