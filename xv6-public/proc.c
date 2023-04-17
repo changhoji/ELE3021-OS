@@ -583,17 +583,29 @@ setPriority(int pid, int priority)
 void
 schedulerLock(int password)
 {
+  int i;
   struct proc *p = myproc();
 
-  if(password == PASSWORD){
+  if(password != PASSWORD){
     cprintf("invalid password in schedulerLock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
     exit();
   }
 
   acquire(&ptable.lock);
+  acquire(&tickslock);
 
   ptable.disabled = 1;
 
+  // insert to L0 queue to scheduling first
+  for(i = ptable.L[0].size; i > 0; i--){
+    ptable.L[0].procs[i] = ptable.L[0].procs[i-1];
+  }
+  ptable.L[0].procs[0] = p;
+  ptable.L[0].size++;
+
+  ticks = 0; // reset global ticks
+
+  release(&tickslock);
   release(&ptable.lock);
 }
 
@@ -604,13 +616,15 @@ schedulerUnlock(int password)
   struct proc *p = myproc();
 
   if(password == PASSWORD){
-    cprintf("invalid password in schedulerLock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
+    cprintf("invalid password in schedulerUnlock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
     exit();
   }
 
   acquire(&ptable.lock);
 
   ptable.disabled = 0;
+  p->usedtime = 0;
+  p->priority = 3;
 
   release(&ptable.lock);
 }
@@ -689,12 +703,13 @@ mlfqscheduler(void)
 
     acquire(&ptable.lock);
 
-    // if(!(ticks%100))
+    // if(ticks == 0)
     //   printqueue(&(ptable.L[0]));
 
     // scheduling in L0
 
     runned = 0; // check in L0 if a process worked
+
     for(i = 0; i < ptable.L[0].size; i++){
       p = front(&ptable.L[0]); // get front of queue
 
@@ -721,11 +736,14 @@ mlfqscheduler(void)
       // increase usedtime
       p->usedtime++;
 
+      if(ptable.disabled)
+        break;
+
       dequeue(&ptable.L[0]);
 
       // enqueue again if there is more time to can use,
       // else enqueue in next queue
-      if(p->usedtime < ptable.L[0].timequantum)
+    if(p->usedtime < ptable.L[0].timequantum)
         enqueue(&ptable.L[0], p);
       else{
         p->level = 1;
@@ -848,6 +866,10 @@ priorityboosting(void)
   struct proc *p;
 
   acquire(&ptable.lock);
+
+  // enable mlfq scheduling
+  ptable.disabled = 0;
+
   for(i = 0; i < 3; i++){
     for(s = 0; s < ptable.L[i].size; s++){
       p = ptable.L[i].procs[0];
@@ -860,6 +882,7 @@ priorityboosting(void)
       }
     }
   }
+
   release(&ptable.lock);
 }
 
@@ -867,5 +890,5 @@ void
 printqueue(struct queue* q){
   
   
-  cprintf("\n");
+  // cprintf("\n");
 }

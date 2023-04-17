@@ -17,7 +17,7 @@ int fork_children()
   for (i = 0; i < NUM_THREAD; i++)
     if ((p = fork()) == 0)
     {
-      sleep(10);
+      sleep(20);
       return getpid();
     }
   return parent;

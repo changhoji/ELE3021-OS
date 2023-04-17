@@ -118,7 +118,7 @@ sys_setPriority(void)
 }
 
 int
-sys_lock(void)
+sys_schedulerLock(void)
 {
   int password;
 
@@ -130,7 +130,7 @@ sys_lock(void)
 }
 
 int
-sys_unlock(void)
+sys_schedulerUnlock(void)
 {
   int password;
 

@@ -48,8 +48,10 @@ trap(struct trapframe *tf)
 
   switch(tf->trapno){
   case T_LOCK:
+    schedulerLock(2021035487);
     break;
   case T_UNLOCK:
+    schedulerUnlock(2021035487);
     break;
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
