@@ -56,6 +56,9 @@ trap(struct trapframe *tf)
       acquire(&tickslock);
       ticks++;
       wakeup(&ticks);
+      if(ticks%100 == 0){
+        priorityboosting();
+      }
       release(&tickslock);
     }
     lapiceoi();

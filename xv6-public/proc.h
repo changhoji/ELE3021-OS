@@ -66,7 +66,7 @@ struct proc {
 
 // struct queue that contains procs
 struct queue {
-  struct proc *procs[QUEUESIZE];
+  struct proc *procs[NPROC+1]; // for remove from queue, +1
   int size;
   int timequantum;
 };

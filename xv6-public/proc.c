@@ -364,7 +364,6 @@ scheduler(void)
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
-      cprintf("name: %s\n", p->name);
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
@@ -634,6 +633,24 @@ struct proc* front(struct queue* q)
   return q->procs[0];
 }
 
+void remove(struct queue* q, int pid){
+  int i;
+  struct proc *p;
+
+  for(i = 0; i < q->size; i++){
+    p = q->procs[i];
+    if(p->pid == pid){
+      break;
+    }
+  }
+
+  if(i < q->size){
+    for(; i < (q->size)-1; i++){
+      q->procs[i] = q->procs[i+1];
+    }
+  }
+}
+
 // New scheduler with mlfq
 void
 mlfqscheduler(void)
@@ -667,6 +684,7 @@ mlfqscheduler(void)
       }
 
       // perfome context switching
+
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
@@ -747,9 +765,30 @@ mlfqscheduler(void)
 
     // scheduling in L2
 
+    runned = 0; // used to check is there existing runnable process in L2 queue
+
     for(i = 0; i < ptable.L[2].size; i++){
       p = ptable.L[2].procs[i];
+      if(p->state == ZOMBIE || p->state == UNUSED){
+        remove(&ptable.L[2], p->pid);
+        i++;
+      }
+      if(p->state == RUNNABLE){
+        runned = 1;
+        i++;
+        break;
+      }
+    }
+  
+    if(runned){ // can run process in L2 queue
+      for(; i < ptable.L[2].size; i++){
+        if(p->priority > ptable.L[2].procs[i]->priority){
+          p = ptable.L[2].procs[i];
+        }
+      }
+
       if(p->state != RUNNABLE){
+        release(&ptable.lock);
         continue;
       }
 
@@ -762,9 +801,14 @@ mlfqscheduler(void)
 
       c->proc = 0;
 
-      break;
+      p->usedtime++;
+      
+      if(p->usedtime >= ptable.L[2].timequantum){
+        p->usedtime = 0;
+        if(p->priority >= 1)
+          p->priority--;
+      }
     }
-    
 
     release(&ptable.lock);
   }
@@ -774,6 +818,22 @@ mlfqscheduler(void)
 void
 priorityboosting(void)
 {
+  int i, s;
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for(i = 0; i < 3; i++){
+    for(s = 0; s < ptable.L[i].size; s++){
+      p = ptable.L[i].procs[s];
+      p->priority = 3;
+      p->usedtime = 0;
+      if(i != 0){ // in L0 queue
+        dequeue(&ptable.L[i]);
+        enqueue(&ptable.L[0], p);
+      }
+    }
+  }
+  release(&ptable.lock);
 }
 
 void 
