@@ -718,7 +718,10 @@ mlfqscheduler(void)
         dequeue(&ptable.L[0]);
         if(p->state != ZOMBIE && p->state != UNUSED) //when zombie or unused, don't enqueue again
           enqueue(&ptable.L[0], p);
-  
+
+        if(ptable.disabled)
+          ptable.disabled = 0;
+
         continue;
       }
 
@@ -733,11 +736,11 @@ mlfqscheduler(void)
 
       c->proc = 0;
 
-      // increase usedtime
-      p->usedtime++;
-
       if(ptable.disabled)
         break;
+
+      // increase usedtime
+      p->usedtime++;
 
       dequeue(&ptable.L[0]);
 
@@ -833,8 +836,6 @@ mlfqscheduler(void)
         release(&ptable.lock);
         continue;
       }
-
-      // cprintf("pid: %d\n", p->pid);
 
       c->proc = p;
       switchuvm(p);
