@@ -343,10 +343,10 @@ void
 scheduler(void)
 {
   int flag = 1;
+
   if (flag)
     mlfqscheduler();
   else{
-
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
@@ -615,7 +615,7 @@ schedulerUnlock(int password)
 {
   struct proc *p = myproc();
 
-  if(password == PASSWORD){
+  if(password != PASSWORD){
     cprintf("invalid password in schedulerUnlock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
     exit();
   }
