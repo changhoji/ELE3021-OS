@@ -10,7 +10,7 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
-  int disabled; // mlfq scheduler lock
+  int mlfqlock; // mlfq scheduler lock
   struct queue L[3];
 } ptable;
 
@@ -32,7 +32,7 @@ pinit(void)
 
   acquire(&ptable.lock);
 
-  ptable.disabled = 0;
+  ptable.mlfqlock = 0;
 
   for (i = 0; i < 3; i++){
     ptable.L[i].size = 0;
@@ -587,21 +587,34 @@ schedulerLock(int password)
   struct proc *p = myproc();
 
   if(password != PASSWORD){
-    cprintf("invalid password in schedulerLock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
+    cprintf("[!] invalid password in schedulerLock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
     exit();
   }
 
   acquire(&ptable.lock);
-  acquire(&tickslock);
 
-  ptable.disabled = 1;
+  if(ptable.mlfqlock == p->pid){
+    cprintf("[!] scheduler is already locked for this process\n");
+    release(&ptable.lock);
+    return;
+  }
+
+  if(ptable.mlfqlock != 0 && ptable.mlfqlock != p->pid){
+    cprintf("[!] shceudler is already locked for other process\n");
+    release(&ptable.lock);
+    return;
+  }
+
+  ptable.mlfqlock = p->pid;
 
   // insert to L0 queue to scheduling first
   for(i = ptable.L[0].size; i > 0; i--){
     ptable.L[0].procs[i] = ptable.L[0].procs[i-1];
   }
   ptable.L[0].procs[0] = p;
+  
   ptable.L[0].size++;
+  acquire(&tickslock);
 
   ticks = 0; // reset global ticks
 
@@ -616,13 +629,25 @@ schedulerUnlock(int password)
   struct proc *p = myproc();
 
   if(password != PASSWORD){
-    cprintf("invalid password in schedulerUnlock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
+    cprintf("[!] invalid password in schedulerUnlock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
     exit();
   }
 
   acquire(&ptable.lock);
 
-  ptable.disabled = 0;
+  if(ptable.mlfqlock == 0){
+    cprintf("[!] scheduler is already unlocked\n");
+    release(&ptable.lock);
+    return;
+  }
+
+  if(ptable.mlfqlock != p->pid){
+    cprintf("[!] scheduler is locked by other process\n");
+    release(&ptable.lock);
+    return;
+  }
+
+  ptable.mlfqlock = 0;
   p->usedtime = 0;
   p->priority = 3;
 
@@ -719,8 +744,8 @@ mlfqscheduler(void)
         if(p->state != ZOMBIE && p->state != UNUSED) //when zombie or unused, don't enqueue again
           enqueue(&ptable.L[0], p);
 
-        if(ptable.disabled)
-          ptable.disabled = 0;
+        if(ptable.mlfqlock)
+          ptable.mlfqlock = 0;
 
         continue;
       }
@@ -736,7 +761,7 @@ mlfqscheduler(void)
 
       c->proc = 0;
 
-      if(ptable.disabled)
+      if(ptable.mlfqlock)
         break;
 
       // increase usedtime
@@ -869,7 +894,7 @@ priorityboosting(void)
   acquire(&ptable.lock);
 
   // enable mlfq scheduling
-  ptable.disabled = 0;
+  ptable.mlfqlock = 0;
 
   for(i = 0; i < 3; i++){
     for(s = 0; s < ptable.L[i].size; s++){

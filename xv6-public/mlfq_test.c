@@ -6,7 +6,7 @@
 #define NUM_YIELD 20000
 #define NUM_SLEEP 1000
 
-#define NUM_THREAD 4
+#define NUM_THREAD 10
 #define MAX_LEVEL 3
 
 int parent;
@@ -17,7 +17,7 @@ int fork_children()
   for (i = 0; i < NUM_THREAD; i++)
     if ((p = fork()) == 0)
     {
-      sleep(15);
+      sleep(3);
       schedulerLock(1);
       return getpid();
     }
