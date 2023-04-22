@@ -9,6 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct queue;
 
 // bio.c
 void            binit(void);
@@ -120,6 +121,10 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+int             getLevel(void);
+void            setPriority(int, int);
+void            schedulerLock(int);
+void            schedulerUnlock(int);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -188,3 +193,12 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+// mlfq.c
+void            mlfqinit(void);
+void            enqueue(struct queue*, struct proc*);
+void            dequeue(struct queue*);
+void            mlfqscheduler(void) __attribute__((noreturn));
+void            priorityboosting(void);
+void            remove(struct queue*, int);
+void printqueue(struct queue*);

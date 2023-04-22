@@ -22,6 +22,8 @@ tvinit(void)
   for(i = 0; i < 256; i++)
     SETGATE(idt[i], 0, SEG_KCODE<<3, vectors[i], 0);
   SETGATE(idt[T_SYSCALL], 1, SEG_KCODE<<3, vectors[T_SYSCALL], DPL_USER);
+  SETGATE(idt[T_LOCK], 1, SEG_KCODE<<3, vectors[T_LOCK], DPL_USER);
+  SETGATE(idt[T_UNLOCK], 1, SEG_KCODE<<3, vectors[T_UNLOCK], DPL_USER);
 
   initlock(&tickslock, "time");
 }
@@ -47,10 +49,20 @@ trap(struct trapframe *tf)
   }
 
   switch(tf->trapno){
+  case T_LOCK:
+    schedulerLock(2021035487);
+    break;
+  case T_UNLOCK:
+    schedulerUnlock(2021035487);
+    break;
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
       acquire(&tickslock);
-      ticks++;
+      ticks = (ticks+1)%100;
+
+      if(ticks == 0)
+        priorityboosting();
+
       wakeup(&ticks);
       release(&tickslock);
     }
