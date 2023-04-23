@@ -19,7 +19,9 @@ static struct proc *initproc;
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
-extern struct mlfq mlfq;
+
+extern uint mlfqticks;
+extern struct spinlock mlfqtickslock;
 
 static void wakeup1(void *chan);
 
@@ -611,6 +613,11 @@ setPriority(int pid, int priority)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->pid == pid)
       p->priority = priority;
+  
+  if(p == &ptable.proc[NPROC]){
+    cprintf("[!] cannot find process\n");
+    return;
+  }
 }
 
 // Lock mlfq scheduler
@@ -648,10 +655,9 @@ schedulerLock(int password)
   release(&ptable.lock);
 
   // reset global ticks
-  acquire(&tickslock);
-  ticks = 0; 
-  release(&tickslock);
-
+  acquire(&mlfqtickslock);
+  mlfqticks = 0;
+  release(&mlfqtickslock);
 }
 
 // Unlock mlfq scheduler
@@ -698,7 +704,6 @@ schedulerUnlock(int password)
   release(&ptable.lock);
 }
 
-
 // [mlfq functions]
 
 // Enqueues proc
@@ -729,19 +734,21 @@ void remove(struct queue* q, int pid){
   int i;
   struct proc *p;
 
+  // find proc to remove
   for(i = 0; i < q->size; i++){
     p = q->procs[i];
     if(p->pid == pid){
       break;
     }
   }
-
+  
+  // pull procs
   if(i < q->size){
     for(; i < (q->size)-1; i++){
       q->procs[i] = q->procs[i+1];
     }
+    q->size--;
   }
-  q->size--;
 }
 
 void insertqueue(struct queue* q, struct proc* p){
@@ -751,8 +758,8 @@ void insertqueue(struct queue* q, struct proc* p){
     for(i = q->size; i > 0; i--){
       q->procs[i] = q->procs[i-1];
     }
+    // insert into front of queue
     q->procs[0] = p;
-
     q->size++;
   }
 }
@@ -769,32 +776,16 @@ mlfqscheduler(void)
   for(;;){
     sti();
 
-    // cprintf("in scheduler %d\n", ticks);
-
     acquire(&ptable.lock);
-
-    if(ptable.lockproc){
-      p = ptable.lockproc;
-      ptable.lockproc = 0;
-      p->usedtime = 0;
-      p->level = 0;
-      p->priority = 3;
-  
-      if(p->state == RUNNING){
-        p->state = RUNNABLE;
-        insertqueue(&ptable.L[0], p);
-      }
-    }
 
     p = 0; // reset to process that will be scheduled
 
     // find process to run from L0 to L2
-    for(i = 0; i < 3; i++){
+    for(i = 0; i < 3; i++)
       if(ptable.L[i].size > 0){
         p = ptable.L[i].procs[0];
         break;
       }
-    }
 
     // perfome context switching
     if(p){
@@ -839,19 +830,17 @@ priorityboosting(void)
    
   acquire(&ptable.lock);
 
-  // enable mlfq scheduling
-  for(i = 0; i < 3; i++){
+  for(i = 0; i < 3; i++)
     for(s = 0; s < ptable.L[i].size; s++){
       p = ptable.L[i].procs[0]; // get front
       p->priority = 3;
       p->usedtime = 0;
       p->level = 0;
-      if(i > 0){ // in L0 queue
+      if(i > 0){ // except in L0 queue
         dequeue(&ptable.L[i]);  
         enqueue(&ptable.L[0], p);
       }
     }
-  }
 
   if(ptable.lockproc){
     p = ptable.lockproc;
@@ -859,25 +848,7 @@ priorityboosting(void)
     p->level = 0;
     p->usedtime = 0;
     p->priority = 3;
-
-    if(p->state == RUNNING){
-      p->state = RUNNABLE;
-      insertqueue(&ptable.L[0], p);
-    }
-
-    sched();
-
-    release(&ptable.lock);
-    return;
   }
 
-
   release(&ptable.lock);
-}
-
-void 
-printqueue(struct queue* q){
-  
-  
-  // cprintf("\n");
 }

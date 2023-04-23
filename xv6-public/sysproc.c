@@ -90,6 +90,8 @@ sys_uptime(void)
   return xticks;
 }
 
+// new wrapper functions
+
 int
 sys_yield(void)
 {

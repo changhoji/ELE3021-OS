@@ -12,7 +12,9 @@
 struct gatedesc idt[256];
 extern uint vectors[];  // in vectors.S: array of 256 entry pointers
 struct spinlock tickslock;
+struct spinlock mlfqtickslock;
 uint ticks;
+uint mlfqticks;
 
 void
 tvinit(void)
@@ -26,6 +28,7 @@ tvinit(void)
   SETGATE(idt[T_UNLOCK], 1, SEG_KCODE<<3, vectors[T_UNLOCK], DPL_USER);
 
   initlock(&tickslock, "time");
+  initlock(&tickslock, "mlfqtime");
 }
 
 void
@@ -50,20 +53,25 @@ trap(struct trapframe *tf)
 
   switch(tf->trapno){
   case T_LOCK:
-    schedulerLock(2021035487);
+    schedulerLock(PASSWORD);
     break;
   case T_UNLOCK:
-    schedulerUnlock(2021035487);
+    schedulerUnlock(PASSWORD);
     break;
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
       acquire(&tickslock);
-      ticks = (ticks+1)%100;
+      acquire(&mlfqtickslock);
 
-      if(ticks == 0)
+      ticks++;
+      mlfqticks = (mlfqticks+1)%100;
+
+      if(mlfqticks == 0)
         priorityboosting();
 
       wakeup(&ticks);
+
+      release(&mlfqtickslock);
       release(&tickslock);
     }
     lapiceoi();
