@@ -39,9 +39,44 @@ int main(int argc, char* argv[])
       break;
 
     case '2':
-      
+      printf(1, "test - lock\n\n");
+
+      if((pid = fork()) != 0){
+        printf(1, "in parent, lock!\n");
+        schedulerLock(password);
+        for(int i = 0; i < 10000; i++){
+          printf(1, " %d", i);
+          if (i % 50 == 0)printf(1, "\n");
+          if (i == 1000) schedulerUnlock(password);
+        }
+        wait();
+      }
+      else{
+        printf(1, "child..\n");
+        for(int i = 0; i < 10000; i++){
+          printf(1, " #");
+          if (i % 50 == 0)printf(1, "\n");
+        }
+        exit();
+      }
       break;
     case '3':
+      printf(1, "test - setpriority\n\n");
+      if((pid = fork()) != 0){
+        setPriority(pid, 0);
+        for(int i = 0; i < 2000; i++){
+          printf(1, " p%d", i);
+          if (i % 30 == 0) printf(1, "\n");
+        }
+        wait();
+      }
+      else{
+        for(int i = 0; i < 2000; i++){
+          printf(1, " c%d", i);
+          if (i % 30 == 0) printf(1, "\n");
+        }
+        exit();
+      }
       break;
   default:
     printf(1, "WRONG CMD\n");

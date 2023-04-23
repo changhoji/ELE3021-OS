@@ -611,13 +611,12 @@ setPriority(int pid, int priority)
   
   // find proc and set new priority
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->pid == pid)
+    if(p->pid == pid){
       p->priority = priority;
+      return;
+    }
   
-  if(p == &ptable.proc[NPROC]){
-    cprintf("[!] cannot find process\n");
-    return;
-  }
+  cprintf("[!] cannot find process\n");
 }
 
 // Lock mlfq scheduler
