@@ -16,20 +16,22 @@ int main(int argc, char* argv[])
 {
   parent = getpid();
 
-  printf(1, "MLFQ test start\n");
+  printf(1, "\nMLFQ test start\n");
   int pid = 0;
   char cmd = argv[1][0];
 
   switch (cmd) {
     case '1':
-      printf(1, "test - yield");
+      printf(1, "test - yield\n\n");
+
       if((pid = fork()) != 0){ // parent
         printf(1, "in parent, call yield\n");
         yield();
+        printf(1, "hello world\n");
         wait();
       }
       else{ // child
-        for(int i = 0; i < 10; i++){
+        for(int i = 0; i < 5; i++){
           printf(1, "child %d\n", i);
         }
         exit();
@@ -37,6 +39,7 @@ int main(int argc, char* argv[])
       break;
 
     case '2':
+      
       break;
     case '3':
       break;
@@ -46,7 +49,7 @@ int main(int argc, char* argv[])
   }
 
 
-  printf(1, "done\n");
+  printf(1, "done\n\n");
   exit();
 }
 

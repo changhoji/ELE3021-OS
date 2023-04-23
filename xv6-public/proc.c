@@ -789,11 +789,22 @@ mlfqscheduler(void)
 
     // perfome context switching
     if(p){
+
+      if(p->level == 2){
+        for(i = 1; i < ptable.L[2].size; i++){
+          if(ptable.L[2].procs[i]->priority < p->priority)
+            p = ptable.L[2].procs[i];
+        }
+      }
+
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
 
-      dequeue(&ptable.L[p->level]);
+      if(p->level == 2)
+        remove(&ptable.L[2], p->pid);
+      else
+        dequeue(&ptable.L[p->level]);
 
       // increase time quantum
       p->usedtime++;
