@@ -586,13 +586,13 @@ procdump(void)
   }
 }
 
+// [System Calls]
+
 // Get level of queue where the process is in
 int
 getLevel(void)
 {
-  struct proc *p = myproc();
-
-  return p->level;
+  return myproc()->level;
 }
 
 // Set priority of the process whose pid is pid
@@ -600,7 +600,14 @@ void
 setPriority(int pid, int priority)
 {
   struct proc *p;
+
+  // don't do setPriority if priority is invalid
+  if(priority < 0 || priority > 3){
+    cprintf("[!] invalid priority in setPriority");
+    return;
+  }
   
+  // find proc and set new priority
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->pid == pid)
       p->priority = priority;
@@ -612,6 +619,7 @@ schedulerLock(int password)
 {
   struct proc *p = myproc();
 
+  // invalid password
   if(password != PASSWORD){
     cprintf("[!] invalid password in schedulerLock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
     exit();
@@ -620,27 +628,28 @@ schedulerLock(int password)
   acquire(&ptable.lock);
 
   if(ptable.lockproc){
+    // locked by this process
     if(ptable.lockproc->pid == p->pid){
-      cprintf("[!] scheduler is already locked for this process\n");
+      cprintf("[!] scheduler is already locked by this process\n");
       release(&ptable.lock);
-      exit();
+      return;
     }
+    // locked by another process
     else{
-      cprintf("[!] shceudler is already locked for other process\n");
+      cprintf("[!] shceudler is already locked by another process\n");
       release(&ptable.lock);
-      exit();
+      return;
     }
   }
 
-  ptable.lockproc = p; // mlfq lock!
-  cprintf("in lock, lock = %p\n", ptable.lockproc);
+  // perfome locking mlfq
+  ptable.lockproc = p;
 
   release(&ptable.lock);
 
+  // reset global ticks
   acquire(&tickslock);
-
-  ticks = 0; // reset global ticks
-
+  ticks = 0; 
   release(&tickslock);
 
 }
@@ -651,6 +660,7 @@ schedulerUnlock(int password)
 {
   struct proc *p = myproc();
 
+  // invalid password
   if(password != PASSWORD){
     cprintf("[!] invalid password in schedulerUnlock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
     exit();
@@ -658,40 +668,43 @@ schedulerUnlock(int password)
 
   acquire(&ptable.lock);
 
+  // not locked
   if(ptable.lockproc == 0){
-    cprintf("[!] scheduler is already unlocked\n");
+    cprintf("[!] scheduler is not locked\n");
     release(&ptable.lock);
     return;
   }
 
+  // locked by another process
   if(ptable.lockproc->pid != p->pid){
-    cprintf("[!] scheduler is locked by other process\n");
+    cprintf("[!] scheduler is locked by another process\n");
     release(&ptable.lock);
     return;
   }
 
-  cprintf("[u] unlock: %d, pid = %d\n", p->state, p->pid);
+  // reset process values
   ptable.lockproc = 0;
   p->level = 0;
   p->usedtime = 0;
   p->priority = 3;
 
+  // input in front of L0 queue
   p->state = RUNNABLE;
   insertqueue(&ptable.L[0], p);
 
+  // call sched for going to scheduler again
   sched();
-  release(&ptable.lock);
 
+  release(&ptable.lock);
 }
 
 
-// mlfq functions
+// [mlfq functions]
 
 // Enqueues proc
 void
 enqueue(struct queue* q, struct proc* proc)
 {
-  // cprintf("enqueue! - %s (%d) (state=%d)\n", proc->name, proc->pid, proc->state);
   if (q->size < NPROC){
     q->procs[q->size] = proc;
     q->size++;
@@ -703,7 +716,6 @@ void
 dequeue(struct queue* q)
 {
   int i;
-  // cprintf("dequeue!\n");
 
   if (q->size > 0){
     for (i = 0; i < q->size-1; i++){
