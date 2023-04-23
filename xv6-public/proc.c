@@ -832,6 +832,7 @@ priorityboosting(void)
 
   for(i = 0; i < 3; i++)
     for(s = 0; s < ptable.L[i].size; s++){
+      cprintf("up! level = %d, size = %d\n", i, ptable.L[i].size);
       p = ptable.L[i].procs[0]; // get front
       p->priority = 3;
       p->usedtime = 0;
