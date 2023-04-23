@@ -201,4 +201,4 @@ void            dequeue(struct queue*);
 void            mlfqscheduler(void) __attribute__((noreturn));
 void            priorityboosting(void);
 void            remove(struct queue*, int);
-void printqueue(struct queue*);
+void            insertqueue(struct queue*, struct proc*);
