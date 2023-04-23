@@ -725,13 +725,6 @@ dequeue(struct queue* q)
   }
 }
 
-// Get front of queue
-struct proc* front(struct queue* q)
-{
-  if (q->size <= 0) return 0;
-  return q->procs[0];
-}
-
 void remove(struct queue* q, int pid){
   int i;
   struct proc *p;
