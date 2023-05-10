@@ -24,13 +24,6 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 
-// new system calls
-void yield(void);
-int getLevel(void);
-void setPriority(int, int);
-void schedulerLock(int);
-void schedulerUnlock(int);
-
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);
