@@ -10,20 +10,34 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  struct proc *lockproc;
+  struct queue L[3];
 } ptable;
 
-static struct proc *initproc;
+static struct proc *initproc; 
 
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
+
+extern uint mlfqticks;
+extern struct spinlock mlfqtickslock;
 
 static void wakeup1(void *chan);
 
 void
 pinit(void)
 {
+  int i;
+
   initlock(&ptable.lock, "ptable");
+
+  ptable.lockproc = 0; // locked by no process
+
+  for (i = 0; i < 3; i++){
+    ptable.L[i].size = 0; // queue size
+    ptable.L[i].timequantum = 2*i+4; // queue time quantum
+  }  
 }
 
 // Must be called with interrupts disabled
@@ -88,6 +102,9 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->priority = 3; // set to 3 in first
+  p->usedtime = 0;
+  p->level = 0; // put in L0 queue
 
   release(&ptable.lock);
 
@@ -149,6 +166,8 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+
+  enqueue(&ptable.L[p->level], p); // enqueue when runnable
 
   release(&ptable.lock);
 }
@@ -216,6 +235,8 @@ fork(void)
 
   np->state = RUNNABLE;
 
+  enqueue(&ptable.L[np->level], np); // enqueue when runnable
+
   release(&ptable.lock);
 
   return pid;
@@ -263,6 +284,10 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+
+  if(ptable.lockproc){
+    ptable.lockproc = 0;
+  }
   sched();
   panic("zombie exit");
 }
@@ -322,37 +347,7 @@ wait(void)
 void
 scheduler(void)
 {
-  struct proc *p;
-  struct cpu *c = mycpu();
-  c->proc = 0;
-  
-  for(;;){
-    // Enable interrupts on this processor.
-    sti();
-
-    // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
-
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
-
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-    }
-    release(&ptable.lock);
-
-  }
+  mlfqscheduler();
 }
 
 // Enter scheduler.  Must hold only ptable.lock
@@ -385,8 +380,21 @@ sched(void)
 void
 yield(void)
 {
+  struct proc *p = myproc();
+
   acquire(&ptable.lock);  //DOC: yieldlock
-  myproc()->state = RUNNABLE;
+
+  // when lock process execute yield, don't execute context switch
+  if(ptable.lockproc){
+    if(ptable.lockproc->pid == p->pid){ 
+      release(&ptable.lock);
+      return;
+    }
+  }
+
+  p->state = RUNNABLE;
+
+  enqueue(&ptable.L[p->level], p); // enqueue when runnable
   sched();
   release(&ptable.lock);
 }
@@ -460,8 +468,10 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+      enqueue(&ptable.L[p->level], p); // enqueue when runnable
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -486,8 +496,10 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING){
         p->state = RUNNABLE;
+        enqueue(&ptable.L[p->level], p); // enqueue when runnable
+      }
       release(&ptable.lock);
       return 0;
     }
@@ -531,4 +543,279 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+// [System Calls]
+
+// Get level of queue where the process is in
+int
+getLevel(void)
+{
+  return myproc()->level;
+}
+
+// Set priority of the process whose pid is pid
+void
+setPriority(int pid, int priority)
+{
+  struct proc *p;
+
+  // don't do setPriority if priority is invalid
+  if(priority < 0 || priority > 3){
+    cprintf("[!] invalid priority in setPriority");
+    return;
+  }
+  
+  // find proc and set new priority
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if(p->pid == pid){
+      p->priority = priority;
+      return;
+    }
+  
+  cprintf("[!] cannot find process\n");
+}
+
+// Lock mlfq scheduler
+void
+schedulerLock(int password)
+{
+  struct proc *p = myproc();
+
+  // invalid password
+  if(password != PASSWORD){
+    cprintf("[!] invalid password in schedulerLock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
+    exit();
+  }
+
+  acquire(&ptable.lock);
+
+  if(ptable.lockproc){
+    // locked by this process
+    if(ptable.lockproc->pid == p->pid){
+      cprintf("[!] scheduler is already locked by this process\n");
+      release(&ptable.lock);
+      return;
+    }
+    // locked by another process
+    else{
+      cprintf("[!] shceudler is already locked by another process\n");
+      release(&ptable.lock);
+      return;
+    }
+  }
+
+  // perfome locking mlfq
+  ptable.lockproc = p;
+
+  release(&ptable.lock);
+
+  // reset global ticks
+  acquire(&mlfqtickslock);
+  mlfqticks = 0;
+  release(&mlfqtickslock);
+}
+
+// Unlock mlfq scheduler
+void
+schedulerUnlock(int password)
+{
+  struct proc *p = myproc();
+
+  // invalid password
+  if(password != PASSWORD){
+    cprintf("[!] invalid password in schedulerUnlock - pid: %d, timequantum: %d, level: %d\n", p->pid, p->usedtime, p->level);
+    exit();
+  }
+
+  acquire(&ptable.lock);
+
+  // not locked
+  if(ptable.lockproc == 0){
+    cprintf("[!] scheduler is not locked\n");
+    release(&ptable.lock);
+    return;
+  }
+
+  // locked by another process
+  if(ptable.lockproc->pid != p->pid){
+    cprintf("[!] scheduler is locked by another process\n");
+    release(&ptable.lock);
+    return;
+  }
+
+  // reset process values
+  ptable.lockproc = 0;
+  p->level = 0;
+  p->usedtime = 0;
+  p->priority = 3;
+
+  // input in front of L0 queue
+  p->state = RUNNABLE;
+  insertqueue(&ptable.L[0], p);
+
+  // call sched for going to scheduler again
+  sched();
+
+  release(&ptable.lock);
+}
+
+// [mlfq functions]
+
+// Enqueues proc
+void
+enqueue(struct queue* q, struct proc* proc)
+{
+  if (q->size < NPROC){
+    q->procs[q->size] = proc;
+    q->size++;
+  }
+}
+
+// Dequeues proc
+void
+dequeue(struct queue* q)
+{
+  int i;
+
+  if (q->size > 0){
+    for (i = 0; i < q->size-1; i++){
+      q->procs[i] = q->procs[i+1];
+    }
+    q->size--;
+  }
+}
+
+void remove(struct queue* q, int pid){
+  int i;
+  struct proc *p;
+
+  // find proc to remove
+  for(i = 0; i < q->size; i++){
+    p = q->procs[i];
+    if(p->pid == pid){
+      break;
+    }
+  }
+  
+  // pull procs
+  if(i < q->size){
+    for(; i < (q->size)-1; i++){
+      q->procs[i] = q->procs[i+1];
+    }
+    q->size--;
+  }
+}
+
+void insertqueue(struct queue* q, struct proc* p){
+  int i;
+
+  if(q->size < NPROC){
+    for(i = q->size; i > 0; i--){
+      q->procs[i] = q->procs[i-1];
+    }
+    // insert into front of queue
+    q->procs[0] = p;
+    q->size++;
+  }
+}
+
+// New scheduler with mlfq
+void
+mlfqscheduler(void)
+{
+  int i;
+  struct proc *p;
+  struct cpu *c = mycpu();
+  c->proc = 0;
+
+  for(;;){
+    sti();
+
+    acquire(&ptable.lock);
+
+    p = 0; // reset to process that will be scheduled
+
+    // find process to run from L0 to L2
+    for(i = 0; i < 3; i++)
+      if(ptable.L[i].size > 0){
+        p = ptable.L[i].procs[0];
+        break;
+      }
+
+    // perfome context switching
+    if(p){
+
+      if(p->level == 2){
+        for(i = 1; i < ptable.L[2].size; i++){
+          if(ptable.L[2].procs[i]->priority < p->priority)
+            p = ptable.L[2].procs[i];
+        }
+      }
+
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      if(p->level == 2)
+        remove(&ptable.L[2], p->pid);
+      else
+        dequeue(&ptable.L[p->level]);
+
+      // increase time quantum
+      p->usedtime++;
+
+      if(p->usedtime >= ptable.L[p->level].timequantum){
+        if(p->level < 2){ // in L0 and L1 queue
+          p->usedtime = 0;
+          p->level++; // will be enqueued in next queue later
+        }
+        else{ // in L2 queue
+          p->usedtime = 0;
+          if(p->priority > 0)
+            p->priority--;
+        }
+      }
+
+      // context switch to p
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      c->proc = 0;
+    }
+
+    release(&ptable.lock);
+  }
+}
+
+// Execute priority boosting
+void
+priorityboosting(void)
+{
+  int i, s;
+  struct proc *p;
+   
+  acquire(&ptable.lock);
+
+  for(i = 0; i < 3; i++)
+    for(s = 0; s < ptable.L[i].size; s++){
+      p = ptable.L[i].procs[0]; // get front
+      p->priority = 3;
+      p->usedtime = 0;
+      p->level = 0;
+      if(i > 0){ // except in L0 queue
+        dequeue(&ptable.L[i]);  
+        enqueue(&ptable.L[0], p);
+      }
+    }
+
+  if(ptable.lockproc){
+    p = ptable.lockproc;
+    ptable.lockproc = 0;
+    p->level = 0;
+    p->usedtime = 0;
+    p->priority = 3;
+  }
+
+  release(&ptable.lock);
 }

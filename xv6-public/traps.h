@@ -36,3 +36,6 @@
 #define IRQ_ERROR       19
 #define IRQ_SPURIOUS    31
 
+// scheduler lock & unlock
+#define T_LOCK         129
+#define T_UNLOCK       130
