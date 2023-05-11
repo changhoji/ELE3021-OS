@@ -1,3 +1,3 @@
-cd xv6-public
+cd $1
 make
 make fs.img
