@@ -4,11 +4,12 @@
 int
 getcmd(char *buf, int nbuf)
 {
-  printf(2, "$ ");
+  printf(2, "& ");
   memset(buf, 0, nbuf);
   gets(buf, nbuf);
   if(buf[0] == 0) // EOF
     return -1;
+  buf[strlen(buf)-1] = 0;
   return 0;
 }
 
@@ -18,7 +19,12 @@ main(void)
   static char buf[100];
   
   while(getcmd(buf, sizeof(buf)) >= 0){
-    printf(2, "hello world!\n");
-    exit();
+    if(!strcmp(buf, "list")){
+      showprocs();
+    }
+    else if(!strcmp(buf, "exit")){
+      printf(2, "terminate pmanager\n");
+      exit();
+    }
   }
 }

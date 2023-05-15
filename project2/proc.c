@@ -413,7 +413,7 @@ forkret(void)
 }
 
 // Atomically release lock and sleep on chan.
-// Reacquires lock when awakened.
+// Reacquires lock when awakened.`
 void
 sleep(void *chan, struct spinlock *lk)
 {
@@ -531,4 +531,19 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+void
+showprocs(void)
+{
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(1){
+      cprintf("name: %s, pid: %d, number of stack pages: %d\n", p->name, p->pid, 1);
+      cprintf("\tmemory size: %d, memory limit: %d\n", p->sz, 1);
+    }
+  }
+  release(&ptable.lock);
 }
