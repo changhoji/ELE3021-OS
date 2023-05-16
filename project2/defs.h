@@ -123,6 +123,7 @@ void            wakeup(void*);
 void            yield(void);
 
 void            showprocs(void);
+int             setmemorylimit(int, int);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

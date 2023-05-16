@@ -88,6 +88,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->memorylimit = 0; // set memorylimit
 
   release(&ptable.lock);
 
@@ -540,10 +541,47 @@ showprocs(void)
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(1){
+    if(p->state == RUNNABLE || p->state == RUNNING){
       cprintf("name: %s, pid: %d, number of stack pages: %d\n", p->name, p->pid, 1);
-      cprintf("\tmemory size: %d, memory limit: %d\n", p->sz, 1);
+      cprintf("\tmemory size: %d, memory limit: %d\n", p->sz, p->memorylimit);
     }
   }
   release(&ptable.lock);
+}
+
+int
+setmemorylimit(int pid, int limit)
+{
+  struct proc *p;
+
+  if(limit < 0){
+    cprintf("invalid limit argument in setmemorylimit\n");
+    return -1;
+  }
+
+  acquire(&ptable.lock);
+
+  // find process and set memorylimit
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if(p->pid == pid){
+      if(p->sz < limit){
+        cprintf("allocated memory is less than new limit\n");
+        release(&ptable.lock);
+        return -1;
+      }
+      p->memorylimit = limit;
+      break;
+    }
+
+  // if any process was not found with pid
+  if(p == &ptable.proc[NPROC]){
+    cprintf("pid not exist\n");
+    release(&ptable.lock);
+
+    return -1;
+  }
+
+  release(&ptable.lock);
+
+  return 0;
 }
