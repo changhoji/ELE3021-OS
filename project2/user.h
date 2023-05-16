@@ -25,6 +25,7 @@ int sleep(int);
 int uptime(void);
 
 void showprocs(void);
+int exec2(char*, char**, int);
 
 // ulib.c
 int stat(const char*, struct stat*);
