@@ -71,7 +71,9 @@ main(void)
   static char buf[100];
   char cmd[100], arg0[100], arg1[100];
   char *bufp;
-  int result;
+  int pid, stacksize, limit;
+  int cpid;
+  char *argv[2] = { 0,};
   
   while(getcmd(buf, sizeof(buf)) >= 0){
     bufp = buf;
@@ -84,21 +86,43 @@ main(void)
         printf(2, "invalid pid\n");
         continue;
       }
-      if(stoi(arg0, &result) < 0){
+      if(stoi(arg0, &pid) < 0){
         printf(2, "invalid pid\n");
         continue;
       }
-      if(kill(result) == 0){
+      if(kill(pid) == 0){
         printf(2, "kill success\n");
       } else{
         printf(2, "kill failed\n");
       }
     } else if(!strcmp(cmd, "execute")){
-      if((bufp = getword(bufp, arg1, sizeof(arg1))) == 0){
+      if((bufp = getword(bufp, arg0, sizeof(arg0))) == 0 || (bufp = getword(bufp, arg1, sizeof(arg1))) == 0){
+        printf(2, "invalid option\n");
         continue;
       }
-    } else if(!strcmp(cmd, "memlim")){
+      if(stoi(arg1, &stacksize) < 0){
+        printf(2, "invalid stacksize\n");
+        continue;
+      }
 
+      if((cpid = fork()) == 0){
+        exec2(arg0, argv, stacksize);
+      }
+    } else if(!strcmp(cmd, "memlim")){
+      if((bufp = getword(bufp, arg0, sizeof(arg0))) == 0 || (bufp = getword(bufp, arg1, sizeof(arg1))) == 0){
+        printf(2, "invalid option\n");
+        continue;
+      }
+      if(stoi(arg0, &pid) < 0 || stoi(arg1, &limit) < 0){
+        printf(2, "invalid oprion\n");
+        continue;
+      }
+
+      if(setmemorylimit(pid, limit) < 0){
+        printf(2, "setmemorylimit failed\n");
+        continue;
+      }
+      printf(2, "setmemorylimit success\n");
     } else if(!strcmp(cmd, "exit")){
       printf(2, "terminate pmanager\n");
       exit();

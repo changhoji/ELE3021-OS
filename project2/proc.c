@@ -564,7 +564,7 @@ setmemorylimit(int pid, int limit)
   // find process and set memorylimit
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->pid == pid){
-      if(p->sz < limit){
+      if(p->sz > limit){
         cprintf("allocated memory is less than new limit\n");
         release(&ptable.lock);
         return -1;
