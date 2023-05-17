@@ -112,10 +112,11 @@ main(void)
       if(fork() == 0){
         if(fork() == 0){
           exec2(arg0, argv, stacksize);
+          printf(2, "exec failed\n");
           exit();
         }
         else{
-          wait();
+          exit();
         }
       }
     } 

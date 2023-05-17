@@ -15,6 +15,7 @@ struct {
 static struct proc *initproc;
 
 int nextpid = 1;
+thread_t nexttid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
@@ -48,8 +49,8 @@ mycpu(void)
   for (i = 0; i < ncpu; ++i) {
     if (cpus[i].apicid == apicid)
       return &cpus[i];
-  }
   panic("unknown apicid\n");
+  }
 }
 
 // Disable interrupts so that we are not rescheduled
@@ -88,6 +89,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->tid = nexttid++;
   p->memorylimit = 0; // set memorylimit
 
   release(&ptable.lock);
@@ -584,4 +586,63 @@ setmemorylimit(int pid, int limit)
   release(&ptable.lock);
 
   return 0;
+}
+
+static struct proc*
+allocthread(void)
+{
+  struct proc *np;
+  struct proc *p = myproc(); // process which called allocthread
+  char *sp;
+
+  acquire(&ptable.lock);
+
+  for(np = ptable.proc; np < &ptable.proc[NPROC]; np++)
+    if(np->state == UNUSED)
+      goto found;
+
+  release(&ptable.lock);
+  return 0;
+
+found:
+  np->state = EMBRYO;
+  np->pid = p->pid;
+  np->tid = nexttid++; // allocate new tid
+  np->memorylimit = p->memorylimit;
+
+  release(&ptable.lock);
+
+  if((p->kstack == kalloc()) == 0){
+    p->state = UNUSED;
+    return 0;
+  }
+  sp = p->kstack + KSTACKSIZE;
+
+  sp -= sizeof *p->tf;
+  p->tf = (struct trapframe*)sp;
+
+  sp -= 4;
+  *(uint*)sp = (uint)trapret;
+
+  sp -= sizeof *p->context;
+  p->context = (struct context*)sp;
+  memset(p->context, 0, sizeof *p->context);
+  p->context->eip = (uint)forkret;
+
+  return p;
+}
+
+int
+thread_create(thread_t thread, void *(*start_routine)(void *), void *arg)
+{
+  int i, pid;
+  struct proc *np;
+  struct proc *p = myproc();
+
+  if((np = allocthread()) == 0){
+    return -1;
+  }
+  
+
+
 }
