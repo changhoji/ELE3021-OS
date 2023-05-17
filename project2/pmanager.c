@@ -72,7 +72,6 @@ main(void)
   char cmd[100], arg0[100], arg1[100];
   char *bufp;
   int pid, stacksize, limit;
-  int cpid;
   char *argv[2] = { 0,};
   
   while(getcmd(buf, sizeof(buf)) >= 0){
@@ -81,21 +80,26 @@ main(void)
 
     if(!strcmp(cmd, "list")){
       showprocs();
-    } else if(!strcmp(cmd, "kill")){
+    } 
+    else if(!strcmp(cmd, "kill")){
       if((bufp = getword(bufp, arg0, sizeof(arg0))) == 0){
         printf(2, "invalid pid\n");
         continue;
       }
+
       if(stoi(arg0, &pid) < 0){
         printf(2, "invalid pid\n");
         continue;
       }
+
       if(kill(pid) == 0){
         printf(2, "kill success\n");
-      } else{
+      } 
+      else{
         printf(2, "kill failed\n");
       }
-    } else if(!strcmp(cmd, "execute")){
+    } 
+    else if(!strcmp(cmd, "execute")){
       if((bufp = getword(bufp, arg0, sizeof(arg0))) == 0 || (bufp = getword(bufp, arg1, sizeof(arg1))) == 0){
         printf(2, "invalid option\n");
         continue;
@@ -105,16 +109,23 @@ main(void)
         continue;
       }
 
-      if((cpid = fork()) == 0){
-        exec2(arg0, argv, stacksize);
+      if(fork() == 0){
+        if(fork() == 0){
+          exec2(arg0, argv, stacksize);
+          exit();
+        }
+        else{
+          wait();
+        }
       }
-    } else if(!strcmp(cmd, "memlim")){
+    } 
+    else if(!strcmp(cmd, "memlim")){
       if((bufp = getword(bufp, arg0, sizeof(arg0))) == 0 || (bufp = getword(bufp, arg1, sizeof(arg1))) == 0){
         printf(2, "invalid option\n");
         continue;
       }
       if(stoi(arg0, &pid) < 0 || stoi(arg1, &limit) < 0){
-        printf(2, "invalid oprion\n");
+        printf(2, "invalid option\n");
         continue;
       }
 
@@ -123,10 +134,12 @@ main(void)
         continue;
       }
       printf(2, "setmemorylimit success\n");
-    } else if(!strcmp(cmd, "exit")){
+    } 
+    else if(!strcmp(cmd, "exit")){
       printf(2, "terminate pmanager\n");
       exit();
-    } else{
+    } 
+    else{
       printf(2, "undefined command\n");
     }
   }
