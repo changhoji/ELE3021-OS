@@ -23,3 +23,4 @@
 #define SYS_showprocs 22
 #define SYS_exec2  23
 #define SYS_setmemorylimit 24
+#define SYS_thread_create  25

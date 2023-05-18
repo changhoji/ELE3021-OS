@@ -89,7 +89,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-  p->tid = nexttid++;
+  p->tid = 0;
   p->memorylimit = 0; // set memorylimit
 
   release(&ptable.lock);
@@ -589,7 +589,7 @@ setmemorylimit(int pid, int limit)
 }
 
 static struct proc*
-allocthread(void)
+allocthread(void *(*start_routine)(void*))
 {
   struct proc *np;
   struct proc *p = myproc(); // process which called allocthread
@@ -627,22 +627,45 @@ found:
   sp -= sizeof *p->context;
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
-  p->context->eip = (uint)forkret;
+
+  p->context->eip = (uint)start_routine; // point to start_routine function
 
   return p;
 }
 
 int
-thread_create(thread_t thread, void *(*start_routine)(void *), void *arg)
+thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
 
-  if((np = allocthread()) == 0){
+  if((np = allocthread(start_routine)) == 0){
     return -1;
   }
+
+  if((np->pgdir = copyuvm(p->pgdir, p->sz)) == 0){
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+  np->sz = p->sz;
+  np->parent = p;
+  *np->tf = *p->tf;
+
+  for(i = 0; i < NOFILE; i++)
+    if(p->ofile[i])
+      np->ofile[i] = filedup(p->name);
+  np->cwd = idup(p->cwd);
+
+  safestrcpy(np->name, p->name, sizeof(p->name));
+
+  acqurie(&ptable.lock);
+
+  np->state = RUNNABLE;
+
+  release(&ptable.lock);
   
-
-
+  return 0;
 }
