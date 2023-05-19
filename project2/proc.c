@@ -49,8 +49,8 @@ mycpu(void)
   for (i = 0; i < ncpu; ++i) {
     if (cpus[i].apicid == apicid)
       return &cpus[i];
-  panic("unknown apicid\n");
   }
+  panic("unknown apicid\n");
 }
 
 // Disable interrupts so that we are not rescheduled
@@ -636,7 +636,7 @@ found:
 int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
-  int i, pid;
+  int i;
   struct proc *np;
   struct proc *p = myproc();
 
@@ -656,12 +656,12 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
-      np->ofile[i] = filedup(p->name);
+      np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
-  acqurie(&ptable.lock);
+  acquire(&ptable.lock);
 
   np->state = RUNNABLE;
 
