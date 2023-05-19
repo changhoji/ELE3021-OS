@@ -1,6 +1,8 @@
 #include "types.h"
 #include "user.h"
 
+int cnt = 0;
+
 int
 getcmd(char *buf, int nbuf)
 {
@@ -16,11 +18,6 @@ getcmd(char *buf, int nbuf)
   return 0;
 }
 
-/// @brief parse each word in command
-/// @param buf cmd line has taken by user
-/// @param word string for saving each word
-/// @param nword word size
-/// @return use to update buf loc
 char*
 getword(char *buf, char *word, int nword){
   if(*buf == '\0')
@@ -44,10 +41,6 @@ getword(char *buf, char *word, int nword){
   return buf;
 }
 
-/// @brief 
-/// @param str 
-/// @param res stoi result
-/// @return -1 if error
 int
 stoi(char *str, int *res){
   int result = 0;
@@ -65,6 +58,32 @@ stoi(char *str, int *res){
   return 0;
 }
 
+
+void*
+test(void* a)
+{
+  int flag = 0;
+  cnt++;
+  printf(2, "Hello, World\n");
+  while(1){
+    if (uptime()%100 == 0 && flag){
+      printf(2, "hi! [%d]\n", cnt);
+      flag = 0;
+    }
+    else if(uptime()%100 != 0)
+      flag = 1;
+  }
+  return 0;
+}
+
+void*
+test2(void* a)
+{
+  printf(2, "Hello, World2\n");
+  while(1){}
+  return 0;
+}
+
 int
 main(void)
 {
@@ -77,7 +96,8 @@ main(void)
   while(getcmd(buf, sizeof(buf)) >= 0){
     bufp = buf;
     bufp = getword(bufp, cmd, sizeof(cmd)); // read command
-
+    if (uptime()%100 == 0)
+      printf(2, "hi!\n");
     if(!strcmp(cmd, "list")){
       showprocs();
     } 
@@ -86,12 +106,10 @@ main(void)
         printf(2, "invalid pid\n");
         continue;
       }
-
       if(stoi(arg0, &pid) < 0){
         printf(2, "invalid pid\n");
         continue;
       }
-
       if(kill(pid) == 0){
         printf(2, "kill success\n");
       } 
@@ -141,6 +159,11 @@ main(void)
       exit();
     } 
     else{
+      thread_t t[3];
+      for(int i = 0; i < 3; i++){
+        thread_create(&t[i], test, 0);
+      }
+      
       printf(2, "undefined command\n");
     }
   }
