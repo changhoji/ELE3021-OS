@@ -52,6 +52,8 @@ struct proc {
 
   int memorylimit;
   thread_t tid;                // Thread ID
+  void *(*start_routine)(void*);
+  struct proc *mainthread;
 };
 
 // Process memory is laid out contiguously, low addresses first:

@@ -107,3 +107,18 @@ sys_setmemorylimit(void)
   
   return setmemorylimit(pid, limit);
 }
+
+int
+sys_thread_create(void)
+{
+  thread_t *thread;
+  void *(*start_routine)(void *) = 0;;
+  void *arg = 0;;
+
+  if(argptr(0, (void*)&thread, sizeof(*thread)) < 0 || argptr(1, (void*)&start_routine, sizeof(*start_routine)) < 0 || argptr(2, (void*)&arg, sizeof(*arg)) < 0)
+    return -1;
+
+  cprintf("after : %p, %p, %p\n", thread, start_routine, arg);
+
+  return thread_create(thread, start_routine, arg);
+}

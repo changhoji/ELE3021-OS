@@ -49,8 +49,8 @@ mycpu(void)
   for (i = 0; i < ncpu; ++i) {
     if (cpus[i].apicid == apicid)
       return &cpus[i];
-  panic("unknown apicid\n");
   }
+  panic("unknown apicid\n");
 }
 
 // Disable interrupts so that we are not rescheduled
@@ -91,6 +91,7 @@ found:
   p->pid = nextpid++;
   p->tid = 0;
   p->memorylimit = 0; // set memorylimit
+  p->start_routine = 0;
 
   release(&ptable.lock);
 
@@ -400,6 +401,18 @@ void
 forkret(void)
 {
   static int first = 1;
+  struct proc* p = myproc();
+  uint sz;
+  
+  if(p->start_routine){
+    p->tf->eip = (uint)p->start_routine;
+    // if((sz = allocuvm(p->pgdir, 0, 2*PGSIZE)) == 0){
+    //   cprintf("allocuvm failed\n");
+    //   return;
+    // }
+    // clearpteu(p->pgdir, (char*)(sz-2*PGSIZE));
+  }
+
   // Still holding ptable.lock from scheduler.
   release(&ptable.lock);
 
@@ -544,7 +557,7 @@ showprocs(void)
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == RUNNABLE || p->state == RUNNING){
-      cprintf("name: %s, pid: %d, number of stack pages: %d\n", p->name, p->pid, 1);
+      cprintf("name: %s, pid: %d, tid: %d, number of stack pages: %d\n", p->name, p->pid, p->tid, 1);
       cprintf("\tmemory size: %d, memory limit: %d\n", p->sz, p->memorylimit);
     }
   }
@@ -597,6 +610,7 @@ allocthread(void *(*start_routine)(void*))
 
   acquire(&ptable.lock);
 
+  // allocate start routine in thread
   for(np = ptable.proc; np < &ptable.proc[NPROC]; np++)
     if(np->state == UNUSED)
       goto found;
@@ -609,34 +623,34 @@ found:
   np->pid = p->pid;
   np->tid = nexttid++; // allocate new tid
   np->memorylimit = p->memorylimit;
+  np->start_routine = start_routine;
 
   release(&ptable.lock);
 
-  if((p->kstack == kalloc()) == 0){
-    p->state = UNUSED;
+  if((np->kstack = kalloc()) == 0){
+    np->state = UNUSED;
     return 0;
   }
-  sp = p->kstack + KSTACKSIZE;
+  sp = np->kstack + KSTACKSIZE;
 
-  sp -= sizeof *p->tf;
-  p->tf = (struct trapframe*)sp;
+  sp -= sizeof *np->tf;
+  np->tf = (struct trapframe*)sp;
 
   sp -= 4;
   *(uint*)sp = (uint)trapret;
 
   sp -= sizeof *p->context;
-  p->context = (struct context*)sp;
+  np->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
+  np->context->eip = (uint)forkret; // point to start_routine function
 
-  p->context->eip = (uint)start_routine; // point to start_routine function
-
-  return p;
+  return np;
 }
 
 int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
-  int i, pid;
+  int i;
   struct proc *np;
   struct proc *p = myproc();
 
@@ -650,18 +664,19 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
     np->state = UNUSED;
     return -1;
   }
+  // np->pgdir = p->pgdir;
+
   np->sz = p->sz;
   np->parent = p;
   *np->tf = *p->tf;
 
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
-      np->ofile[i] = filedup(p->name);
+      np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
-
   safestrcpy(np->name, p->name, sizeof(p->name));
 
-  acqurie(&ptable.lock);
+  acquire(&ptable.lock);
 
   np->state = RUNNABLE;
 
