@@ -15,6 +15,7 @@ struct {
 static struct proc *initproc;
 
 int nextpid = 1;
+int nexttid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
@@ -200,6 +201,12 @@ fork(void)
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
+  // update np datas
+  np->mainthread = np;
+  np->tid = 0;
+  np->stacksize = curproc->stacksize;
+  np->memorylimit = curproc->memorylimit;
+
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
@@ -289,12 +296,13 @@ wait(void)
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
-        freevm(p->pgdir);
+        p->tid ? 0 : freevm(p->pgdir);
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        
         release(&ptable.lock);
         return pid;
       }
@@ -351,7 +359,9 @@ scheduler(void)
       c->proc = 0;
     }
     release(&ptable.lock);
-
+    if(ticks % 100 == 0){
+      showprocs();
+    }
   }
 }
 
@@ -540,9 +550,11 @@ showprocs(void)
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->state == RUNNABLE || p->state == RUNNING){
-      cprintf("name: %s, pid: %d, number of stack pages: %d\n", p->name, p->pid, 1);
+    // if(p->state == RUNNABLE || p->state == RUNNING){
+    if(p->state != UNUSED){
+      cprintf("name: %s, pid: %d, tid: %d, number of stack pages: %d\n", p->name, p->pid, p->tid, 1);
       cprintf("\tmemory size: %d, memory limit: %d\n", p->sz, p->memorylimit);
+      cprintf("\tstate = %d\n", p->state);
     }
   }
   release(&ptable.lock);
@@ -587,6 +599,60 @@ setmemorylimit(int pid, int limit)
 int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
+  struct proc *np;
+  struct proc *curproc = myproc();
+  struct proc *mainthread = curproc->mainthread;
+  int i;
+  uint ustack[2];
+
+  if ((np = allocproc()) == 0){
+    return -1;
+  }
+
+  np->pgdir = mainthread->pgdir;
+  np->sz = mainthread->sz;
+  np->parent = curproc;
+  *np->tf = *curproc->tf;
+
+  np->mainthread = mainthread;
+  np->pid = mainthread->pid;
+  np->tid = nexttid++;
+  // np->stacksize;
+  // np->memorylimit;
+
+  // alloc user stack pages to thread
+  if((np->sz = allocuvm(np->pgdir, np->sz, np->sz + 2*PGSIZE)) == 0){
+    return -1;
+  }
+  clearpteu(np->pgdir, (char*)(np->sz - 2*PGSIZE));
+
+  // update mainthread size
+  mainthread->sz = np->sz;
+
+  np->tf->esp = np->sz - 8;
+  ustack[1] = (uint)arg;
+  ustack[0] = 0xffffffff;
+
+  if(copyout(np->pgdir, np->tf->esp, ustack, 8) == -1){
+    return -1;
+  }
+
+  np->tf->eip = (uint)start_routine;
+
+  for(i = 0; i < NOFILE; i++)
+    if(mainthread->ofile[i])
+      np->ofile[i] = filedup(mainthread->ofile[i]);
+  np->cwd = idup(mainthread->cwd);
+
+  safestrcpy(np->name, mainthread->name, sizeof(mainthread->name));
+
+  acquire(&ptable.lock);
+
+  *thread = np->tid;
+  np->state = RUNNABLE;
+
+  release(&ptable.lock);
+
   return 0;
 }
 
@@ -594,10 +660,90 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 void
 thread_exit(void *retval)
 {
+  struct proc *curproc = myproc();
+  struct proc *p;
+  int fd;
+
+  if(curproc == initproc)
+    panic("init exiting");
+
+  // Close all open files.
+  for(fd = 0; fd < NOFILE; fd++){
+    if(curproc->ofile[fd]){
+      fileclose(curproc->ofile[fd]);
+      curproc->ofile[fd] = 0;
+    }
+  }
+
+  begin_op();
+  iput(curproc->cwd);
+  end_op();
+  curproc->cwd = 0;
+
+  acquire(&ptable.lock);
+
+  curproc->retval = retval;
+
+  // Parent might be sleeping in wait().
+  wakeup1(curproc);
+
+  // Pass abandoned children to init.
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->parent == curproc){
+      p->parent = initproc;
+      if(p->state == ZOMBIE)
+        wakeup1(initproc);
+    }
+  }
+
+  // Jump into the scheduler, never to return.
+  curproc->state = ZOMBIE;
+  sched();
+  panic("zombie exit");
 }
 
 int
 thread_join(thread_t thread, void **retval)
 {
-  return 1;
+  struct proc *p;
+  int havekids;
+  struct proc *curproc = myproc();
+  
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->tid != thread)
+        continue;
+      havekids = 1;
+      cprintf("havekid when %d?\n", thread);
+      if(p->state == ZOMBIE){
+        // Found one.
+        kfree(p->kstack);
+        p->kstack = 0;
+        
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+
+        *retval = p->retval;
+        p->retval = 0;
+        
+        release(&ptable.lock);
+        return 0;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || curproc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(p, &ptable.lock);  //DOC: wait-sleep
+  }
 }
