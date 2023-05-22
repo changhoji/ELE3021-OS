@@ -360,7 +360,7 @@ scheduler(void)
     }
     release(&ptable.lock);
     if(ticks % 100 == 0){
-      showprocs();
+      // showprocs();
     }
   }
 }
@@ -550,11 +550,10 @@ showprocs(void)
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    // if(p->state == RUNNABLE || p->state == RUNNING){
-    if(p->state != UNUSED){
-      cprintf("name: %s, pid: %d, tid: %d, number of stack pages: %d\n", p->name, p->pid, p->tid, 1);
+    if(p->tid) continue; // skip when p is subthread
+    if(p->state == RUNNABLE || p->state == RUNNING){ // print only runnable or running process
+      cprintf("name: %s, pid: %d, number of stack pages: %d\n", p->name, p->pid, p->stacksize);
       cprintf("\tmemory size: %d, memory limit: %d\n", p->sz, p->memorylimit);
-      cprintf("\tstate = %d\n", p->state);
     }
   }
   release(&ptable.lock);
@@ -661,7 +660,6 @@ void
 thread_exit(void *retval)
 {
   struct proc *curproc = myproc();
-  struct proc *p;
   int fd;
 
   if(curproc == initproc)
@@ -685,19 +683,10 @@ thread_exit(void *retval)
   curproc->retval = retval;
 
   // Parent might be sleeping in wait().
+  curproc->state = ZOMBIE;
   wakeup1(curproc);
 
-  // Pass abandoned children to init.
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->parent == curproc){
-      p->parent = initproc;
-      if(p->state == ZOMBIE)
-        wakeup1(initproc);
-    }
-  }
-
   // Jump into the scheduler, never to return.
-  curproc->state = ZOMBIE;
   sched();
   panic("zombie exit");
 }
@@ -717,24 +706,25 @@ thread_join(thread_t thread, void **retval)
       if(p->tid != thread)
         continue;
       havekids = 1;
-      cprintf("havekid when %d?\n", thread);
       if(p->state == ZOMBIE){
         // Found one.
         kfree(p->kstack);
+        deallocuvm(p->pgdir, p->sz, p->sz - 2*PGSIZE);
         p->kstack = 0;
         
         p->pid = 0;
+        p->tid = 0;
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-
         *retval = p->retval;
         p->retval = 0;
         
         release(&ptable.lock);
         return 0;
       }
+      break;
     }
 
     // No point waiting if we don't have any children.
@@ -742,7 +732,6 @@ thread_join(thread_t thread, void **retval)
       release(&ptable.lock);
       return -1;
     }
-
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
     sleep(p, &ptable.lock);  //DOC: wait-sleep
   }
