@@ -89,7 +89,7 @@ trap(struct trapframe *tf)
     // In user space, assume process misbehaved.
     cprintf("pid %d tid %d %s: trap %d err %d on cpu %d "
             "eip 0x%x addr 0x%x--kill proc\n",
-            myproc()->pid, myproc()->tid, myproc()->name, tf->trapno,
+            myproc()->pid, myproc()->name, tf->trapno,
             tf->err, cpuid(), tf->eip, rcr2());
     myproc()->killed = 1;
   }
