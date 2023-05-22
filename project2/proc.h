@@ -51,6 +51,10 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   int memorylimit;
+  uint stacksize;
+  struct proc *mainthread;
+  thread_t tid;
+  void *retval;
 };
 
 // Process memory is laid out contiguously, low addresses first:
