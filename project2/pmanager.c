@@ -2,6 +2,7 @@
 #include "user.h"
 
 int cnt = 0;
+char *argv[] = {};
 
 int
 getcmd(char *buf, int nbuf)
@@ -159,11 +160,6 @@ main(void)
       exit();
     } 
     else{
-      thread_t t[3];
-      for(int i = 0; i < 3; i++){
-        thread_create(&t[i], test, 0);
-      }
-      
       printf(2, "undefined command\n");
     }
   }
