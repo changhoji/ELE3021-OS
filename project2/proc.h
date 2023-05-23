@@ -55,6 +55,7 @@ struct proc {
   struct proc *mainthread;
   thread_t tid;
   void *retval;
+  uint totalsize;
 };
 
 // Process memory is laid out contiguously, low addresses first:

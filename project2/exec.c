@@ -8,6 +8,13 @@
 #include "elf.h"
 
 int
+recover()
+{
+  
+  return 0;
+}
+
+int
 exec(char *path, char **argv)
 {
   char *s, *last;

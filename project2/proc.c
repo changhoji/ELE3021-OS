@@ -88,7 +88,6 @@ allocproc(void)
 
 found:
   p->state = EMBRYO;
-  p->pid = nextpid++;
 
   release(&ptable.lock);
 
@@ -203,6 +202,7 @@ fork(void)
 
   // update np datas
   np->mainthread = np;
+  np->pid = nextpid++;
   np->tid = 0;
   np->stacksize = curproc->stacksize;
   np->memorylimit = curproc->memorylimit;
@@ -719,6 +719,7 @@ thread_join(thread_t thread, void **retval)
         p->killed = 0;
         p->state = UNUSED;
         *retval = p->retval;
+        // cprintf("retval: %p\n", p->retval);
         p->retval = 0;
         
         release(&ptable.lock);
