@@ -616,6 +616,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   np->mainthread = mainthread;
   np->pid = mainthread->pid;
   np->tid = nexttid++;
+  np->retval = 0;
   // np->stacksize;
   // np->memorylimit;
 
@@ -659,6 +660,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 void
 thread_exit(void *retval)
 {
+  cprintf("as;ldkfj;lsadkf %p\n", retval);
   struct proc *curproc = myproc();
   int fd;
 
@@ -683,8 +685,8 @@ thread_exit(void *retval)
   curproc->retval = retval;
 
   // Parent might be sleeping in wait().
+  wakeup1((void*)curproc->tid);
   curproc->state = ZOMBIE;
-  wakeup1(curproc);
 
   // Jump into the scheduler, never to return.
   sched();
@@ -708,24 +710,23 @@ thread_join(thread_t thread, void **retval)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
+        *retval = p->retval;
         kfree(p->kstack);
-        deallocuvm(p->pgdir, p->sz, p->sz - 2*PGSIZE);
+        deallocuvm(p->pgdir, p->sz, p->sz + 2*PGSIZE);
         p->kstack = 0;
-        
+        cprintf("free tid = %d\n", p->tid);
         p->pid = 0;
         p->tid = 0;
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        *retval = p->retval;
-        // cprintf("retval: %p\n", p->retval);
+        // cprintf("rdasdfasdfetval: %p\n", *((uint*)p->retval));
         p->retval = 0;
         
         release(&ptable.lock);
         return 0;
       }
-      break;
     }
 
     // No point waiting if we don't have any children.
@@ -734,6 +735,6 @@ thread_join(thread_t thread, void **retval)
       return -1;
     }
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    sleep(p, &ptable.lock);  //DOC: wait-sleep
+    sleep((void*)thread, &ptable.lock);  //DOC: wait-sleep
   }
 }

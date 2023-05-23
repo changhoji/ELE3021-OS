@@ -185,6 +185,7 @@ UPROGS=\
 	_cthread\
 	_loop\
 	_thread_fork\
+	_test\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
