@@ -668,8 +668,6 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   np->tid = nexttid++;
   np->retval = 0;
   np->parent = mainthread->parent;
-  // np->stacksize;
-  // np->memorylimit;
 
   // alloc user stack pages to thread
   if(mainthread->totalsize + 2*PGSIZE < mainthread->memorylimit){
