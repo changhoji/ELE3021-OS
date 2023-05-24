@@ -197,6 +197,7 @@ fork(void)
     return -1;
   }
   np->sz = curproc->sz;
+  np->totalsize = curproc->totalsize;
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
@@ -205,7 +206,7 @@ fork(void)
   np->pid = nextpid++;
   np->tid = 0;
   np->stacksize = curproc->stacksize;
-  np->memorylimit = curproc->memorylimit;
+  np->memorylimit = 0;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -255,6 +256,11 @@ exit(void)
   curproc->cwd = 0;
 
   acquire(&ptable.lock);
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(curproc->pid == p->pid && p->tid)
+      cleanthread(p);
+  }
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
@@ -493,7 +499,7 @@ kill(int pid)
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid){
+    if(p->pid == pid && p->tid == 0){
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
@@ -551,9 +557,9 @@ showprocs(void)
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->tid) continue; // skip when p is subthread
-    if(p->state == RUNNABLE || p->state == RUNNING){ // print only runnable or running process
+    if(p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING){ // print only runnable or running process
       cprintf("name: %s, pid: %d, number of stack pages: %d\n", p->name, p->pid, p->stacksize);
-      cprintf("\tmemory size: %d, memory limit: %d\n", p->sz, p->memorylimit);
+      cprintf("\tmemory size: %d, memory limit: %d\n", p->totalsize, p->memorylimit);
     }
   }
   release(&ptable.lock);
@@ -595,6 +601,25 @@ setmemorylimit(int pid, int limit)
   return 0;
 }
 
+void
+cleanthread(struct proc* p)
+{
+  if(p->tid && p->state == ZOMBIE){
+    kfree(p->kstack);
+    deallocuvm(p->pgdir, p->sz, p->sz + 2*PGSIZE);
+    p->mainthread->totalsize -= 2*PGSIZE;
+
+    p->kstack = 0;
+    p->pid = 0;
+    p->tid = 0;
+    p->parent = 0;
+    p->name[0] = 0;
+    p->killed = 0;
+    p->state = UNUSED;
+    p->retval = 0;
+  }
+}
+
 int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
@@ -621,6 +646,10 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   // np->memorylimit;
 
   // alloc user stack pages to thread
+  if(mainthread->totalsize + 2*PGSIZE < mainthread->memorylimit){
+    return -1;
+  }
+
   if((np->sz = allocuvm(np->pgdir, np->sz, np->sz + 2*PGSIZE)) == 0){
     return -1;
   }
@@ -628,6 +657,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 
   // update mainthread size
   mainthread->sz = np->sz;
+  mainthread->totalsize += 2*PGSIZE;
 
   np->tf->esp = np->sz - 8;
   ustack[1] = (uint)arg;
@@ -711,18 +741,8 @@ thread_join(thread_t thread, void **retval)
       if(p->state == ZOMBIE){
         // Found one.
         *retval = p->retval;
-        kfree(p->kstack);
-        deallocuvm(p->pgdir, p->sz, p->sz + 2*PGSIZE);
-        p->kstack = 0;
-        cprintf("free tid = %d\n", p->tid);
-        p->pid = 0;
-        p->tid = 0;
-        p->parent = 0;
-        p->name[0] = 0;
-        p->killed = 0;
-        p->state = UNUSED;
-        // cprintf("rdasdfasdfetval: %p\n", *((uint*)p->retval));
-        p->retval = 0;
+        
+        cleanthread(p);
         
         release(&ptable.lock);
         return 0;
