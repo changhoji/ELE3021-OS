@@ -161,7 +161,9 @@ growproc(int n)
   uint sz;
   struct proc *curproc = myproc();
 
-  sz = curproc->sz;
+  acquire(&ptable.lock);
+
+  sz = curproc->mainthread->sz;
   if(n > 0){
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
@@ -169,7 +171,10 @@ growproc(int n)
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
   }
-  curproc->sz = sz;
+  curproc->mainthread->sz = sz;
+
+  release(&ptable.lock);
+
   switchuvm(curproc);
   return 0;
 }
@@ -258,8 +263,11 @@ exit(void)
   acquire(&ptable.lock);
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(curproc->pid == p->pid && p->tid)
+    if(p->pid == curproc->pid && p != curproc){
+      p->state = ZOMBIE;
       cleanthread(p);
+      // p->killed = 1;
+    }
   }
 
   // Parent might be sleeping in wait().
@@ -365,9 +373,6 @@ scheduler(void)
       c->proc = 0;
     }
     release(&ptable.lock);
-    if(ticks % 100 == 0){
-      // showprocs();
-    }
   }
 }
 
@@ -499,7 +504,7 @@ kill(int pid)
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid && p->tid == 0){
+    if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
@@ -604,7 +609,7 @@ setmemorylimit(int pid, int limit)
 void
 cleanthread(struct proc* p)
 {
-  if(p->tid && p->state == ZOMBIE){
+  if(p->state == ZOMBIE){
     kfree(p->kstack);
     deallocuvm(p->pgdir, p->sz, p->sz + 2*PGSIZE);
     p->mainthread->totalsize -= 2*PGSIZE;
@@ -618,6 +623,26 @@ cleanthread(struct proc* p)
     p->state = UNUSED;
     p->retval = 0;
   }
+}
+
+void cleanforexec()
+{
+  struct proc *p;
+  struct proc *curproc = myproc();
+
+  if(curproc->tid == 0) 
+    return;
+
+  acquire(&ptable.lock);
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == curproc->pid && p != curproc){
+      p->state = ZOMBIE;
+      cleanthread(p);
+    }
+  }
+
+  release(&ptable.lock);
 }
 
 int
@@ -642,6 +667,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   np->pid = mainthread->pid;
   np->tid = nexttid++;
   np->retval = 0;
+  np->parent = mainthread->parent;
   // np->stacksize;
   // np->memorylimit;
 
@@ -690,7 +716,6 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 void
 thread_exit(void *retval)
 {
-  cprintf("as;ldkfj;lsadkf %p\n", retval);
   struct proc *curproc = myproc();
   int fd;
 

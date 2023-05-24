@@ -128,6 +128,7 @@ void            cleanthread(struct proc*);
 int             thread_create(thread_t*, void*(*)(void*), void*);
 void            thread_exit(void*);
 int             thread_join(thread_t, void**);
+void            cleanforexec();
 
 
 // swtch.S

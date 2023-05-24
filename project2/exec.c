@@ -60,6 +60,8 @@ exec(char *path, char **argv)
   end_op();
   ip = 0;
 
+  cleanforexec();
+
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
@@ -171,6 +173,8 @@ exec2(char *path, char **argv, int stacksize)
   iunlockput(ip);
   end_op();
   ip = 0;
+
+  cleanforexec();
 
   // Alocate stacksize + 1 pages
   // make the first inaccesible, use otheres as the user stack
