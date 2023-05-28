@@ -163,6 +163,7 @@ growproc(int n)
 
   acquire(&ptable.lock);
 
+  // check memorylimit of mainthread
   sz = curproc->mainthread->sz;
   if(curproc->mainthread->memorylimit && sz + n > curproc->mainthread->memorylimit)
     return -1;
@@ -657,6 +658,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   int i;
   uint ustack[2];
 
+  // find UNUSED proc with allocproc
   if ((np = allocproc()) == 0){
     return -1;
   }
@@ -677,6 +679,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
     return -1;
   }
 
+  // alloc user stack page
   if((np->sz = allocuvm(np->pgdir, np->sz, np->sz + 2*PGSIZE)) == 0){
     return -1;
   }
@@ -689,10 +692,12 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   ustack[1] = (uint)arg;
   ustack[0] = 0xffffffff;
 
+  // set ustack
   if(copyout(np->pgdir, np->tf->esp, ustack, 8) == -1){
     return -1;
   }
 
+  // assign start routine in eip
   np->tf->eip = (uint)start_routine;
 
   for(i = 0; i < NOFILE; i++)
@@ -779,7 +784,7 @@ thread_join(thread_t thread, void **retval)
       release(&ptable.lock);
       return -1;
     }
-    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    // Wait for thread to exit
     sleep((void*)thread, &ptable.lock);  //DOC: wait-sleep
   }
 }
