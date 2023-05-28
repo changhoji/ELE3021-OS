@@ -262,11 +262,11 @@ exit(void)
 
   acquire(&ptable.lock);
 
+  // kill threads other than myself
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == curproc->pid && p != curproc){
       p->state = ZOMBIE;
       cleanthread(p);
-      // p->killed = 1;
     }
   }
 
@@ -310,7 +310,7 @@ wait(void)
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
-        p->tid ? 0 : freevm(p->pgdir);
+        freevm(p->pgdir);
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;
@@ -554,6 +554,7 @@ procdump(void)
   }
 }
 
+// system call for 'list' command in pmanager
 void
 showprocs(void)
 {
@@ -562,7 +563,7 @@ showprocs(void)
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->tid) continue; // skip when p is subthread
-    if(p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING){ // print only runnable or running process
+    if(p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING){ // print only runnable or running or sleeping process
       cprintf("name: %s, pid: %d, number of stack pages: %d\n", p->name, p->pid, p->stacksize);
       cprintf("\tmemory size: %d, memory limit: %d\n", p->totalsize, p->memorylimit);
     }

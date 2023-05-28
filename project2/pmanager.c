@@ -97,11 +97,11 @@ main(void)
   while(getcmd(buf, sizeof(buf)) >= 0){
     bufp = buf;
     bufp = getword(bufp, cmd, sizeof(cmd)); // read command
-    if (uptime()%100 == 0)
-      printf(2, "hi!\n");
+    // list command
     if(!strcmp(cmd, "list")){
       showprocs();
     } 
+    // kill command
     else if(!strcmp(cmd, "kill")){
       if((bufp = getword(bufp, arg0, sizeof(arg0))) == 0){
         printf(2, "invalid pid\n");
@@ -118,6 +118,7 @@ main(void)
         printf(2, "kill failed\n");
       }
     } 
+    // execute command
     else if(!strcmp(cmd, "execute")){
       if((bufp = getword(bufp, arg0, sizeof(arg0))) == 0 || (bufp = getword(bufp, arg1, sizeof(arg1))) == 0){
         printf(2, "invalid option\n");
@@ -129,16 +130,17 @@ main(void)
       }
 
       if(fork() == 0){
-        if(fork() == 0){
+        if(fork() == 0){ // exec in grandchild (parent is exited)
           exec2(arg0, argv, stacksize);
           printf(2, "exec failed\n");
           exit();
         }
         else{
-          exit();
+          exit(); // exit child of pmanager
         }
       }
     } 
+    // memlim command
     else if(!strcmp(cmd, "memlim")){
       if((bufp = getword(bufp, arg0, sizeof(arg0))) == 0 || (bufp = getword(bufp, arg1, sizeof(arg1))) == 0){
         printf(2, "invalid option\n");
@@ -155,10 +157,12 @@ main(void)
       }
       printf(2, "setmemorylimit success\n");
     } 
+    // exit command
     else if(!strcmp(cmd, "exit")){
       printf(2, "terminate pmanager\n");
       exit();
     } 
+    // undefined command
     else{
       printf(2, "undefined command\n");
     }
