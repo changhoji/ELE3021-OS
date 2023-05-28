@@ -99,7 +99,6 @@ exec(char *path, char **argv)
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
   curproc->sz = sz;
-  curproc->totalsize = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   curproc->stacksize = 1;
@@ -214,7 +213,6 @@ exec2(char *path, char **argv, int stacksize)
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
   curproc->sz = sz;
-  curproc->totalsize = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   curproc->stacksize = stacksize;

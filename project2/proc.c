@@ -164,6 +164,9 @@ growproc(int n)
   acquire(&ptable.lock);
 
   sz = curproc->mainthread->sz;
+  if(curproc->mainthread->memorylimit && sz + n > curproc->mainthread->memorylimit)
+    return -1;
+
   if(n > 0){
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
@@ -202,7 +205,6 @@ fork(void)
     return -1;
   }
   np->sz = curproc->sz;
-  np->totalsize = curproc->totalsize;
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
@@ -565,7 +567,7 @@ showprocs(void)
     if(p->tid) continue; // skip when p is subthread
     if(p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING){ // print only runnable or running or sleeping process
       cprintf("name: %s, pid: %d, number of stack pages: %d\n", p->name, p->pid, p->stacksize);
-      cprintf("\tmemory size: %d, memory limit: %d\n", p->totalsize, p->memorylimit);
+      cprintf("\tmemory size: %d, memory limit: %d\n", p->sz, p->memorylimit);
     }
   }
   release(&ptable.lock);
@@ -612,8 +614,8 @@ cleanthread(struct proc* p)
 {
   if(p->state == ZOMBIE){
     kfree(p->kstack);
+
     deallocuvm(p->pgdir, p->sz, p->sz + 2*PGSIZE);
-    p->mainthread->totalsize -= 2*PGSIZE;
 
     p->kstack = 0;
     p->pid = 0;
@@ -671,7 +673,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   np->parent = mainthread->parent;
 
   // alloc user stack pages to thread
-  if(mainthread->totalsize + 2*PGSIZE < mainthread->memorylimit){
+  if(mainthread->memorylimit && mainthread->sz + 2*PGSIZE > mainthread->memorylimit){
     return -1;
   }
 
@@ -682,7 +684,6 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 
   // update mainthread size
   mainthread->sz = np->sz;
-  mainthread->totalsize += 2*PGSIZE;
 
   np->tf->esp = np->sz - 8;
   ustack[1] = (uint)arg;
