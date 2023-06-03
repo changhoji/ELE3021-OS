@@ -372,8 +372,8 @@ iunlockput(struct inode *ip)
 static uint
 bmap(struct inode *ip, uint bn)
 {
-  uint addr, *a;
-  struct buf *bp;
+  uint addr, *a, *d, *t;
+  struct buf *bp, *dbp, *tbp;
 
   if(bn < NDIRECT){
     if((addr = ip->addrs[bn]) == 0)
@@ -398,7 +398,81 @@ bmap(struct inode *ip, uint bn)
   bn -= NINDIRECT;
 
   if(bn < NDINDIRECT){
+    uint dindex = bn / NINDIRECT;
+    uint index = bn % NINDIRECT;
 
+    // allocate double indirect block
+    if((addr = ip->addrs[NDIRECT+1]) == 0)
+      ip->addrs[NDIRECT+1] = addr = balloc(ip->dev);
+
+    // get double indirect block data
+    dbp = bread(ip->dev, addr);
+    d = (uint*)dbp->data;
+
+    // allocate indirect block in double indirect block
+    if((addr = d[dindex]) == 0){
+      d[dindex] = addr = balloc(ip->dev);
+      log_write(dbp);
+    }
+
+    // get indirect block data
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    // allocate direct block in indirect block
+    if((addr = a[index]) == 0){
+      a[index] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+
+    brelse(bp);
+    brelse(dbp);
+    return addr;
+  }
+  bn -= NDINDIRECT;
+
+  if(bn < NTINDIRECT){
+    uint tindex = bn / NDINDIRECT;
+    uint dindex = (bn % NDINDIRECT) / NINDIRECT;
+    uint index = (bn % NDINDIRECT) % NINDIRECT;
+
+    cprintf("tindex = %d, dindex = %d, index = %d\n", tindex, dindex, index);
+
+    // allocate triple indirect block
+    if((addr = ip->addrs[NDIRECT+2]) == 0)
+      ip->addrs[NDIRECT+2] = addr = balloc(ip->dev);
+
+    // get triple indirect block data
+    tbp = bread(ip->dev, addr);
+    t = (uint*)tbp->data;
+
+    // allocate double indirect block in triple indirect block
+    if((addr = t[tindex]) == 0){
+      t[tindex] = addr = balloc(ip->dev);
+      log_write(tbp);
+    }
+
+    dbp = bread(ip->dev, addr);
+    d = (uint*)dbp->data;
+
+    // allocate indirect blocin in double indirect block
+    if((addr = d[dindex]) == 0){
+      d[dindex] = addr = balloc(ip->dev);
+      log_write(dbp);
+    }
+
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    
+    if((addr = a[index]) == 0){
+      a[index] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+
+    brelse(bp);
+    brelse(dbp);
+    brelse(tbp);
+    return addr;
   }
 
   panic("bmap: out of range");
@@ -412,10 +486,10 @@ bmap(struct inode *ip, uint bn)
 static void
 itrunc(struct inode *ip)
 {
-  int i, j;
-  struct buf *bp;
-  uint *a;
+  int i, j, k;
+  struct buf *bp, *dbp, *tbp;
 
+  uint *a, *d, *t;
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
       bfree(ip->dev, ip->addrs[i]);
@@ -433,6 +507,78 @@ itrunc(struct inode *ip)
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  // trunc double indirect address
+  if(ip->addrs[NDIRECT+1]){
+    // read double indirect block
+    dbp = bread(ip->dev, ip->addrs[NDIRECT+1]);
+    d = (uint*)dbp->data;
+
+    // for each indirect block in double indirect block
+    for(i = 0; i < NINDIRECT; i++){
+      if(d[i]){
+        // read indirect block
+        bp = bread(ip->dev, d[i]);
+        a = (uint*)bp->data;
+
+        // for each direct block in indirect block
+        for(j = 0; j < NINDIRECT; j++){
+          // free direct lock
+          if(a[j])
+            bfree(ip->dev, a[j]);
+        }
+        // free indirect block
+        brelse(bp);
+        bfree(ip->dev, d[i]);
+      }
+    }
+    // free double indirect block
+    brelse(dbp);
+    bfree(ip->dev, ip->addrs[NDIRECT+1]);
+    ip->addrs[NDIRECT+1] = 0;
+  }
+
+  // trunc triple indirect address
+  if(ip->addrs[NDIRECT+2]){
+    // read triple indirect block
+    tbp = bread(ip->dev, ip->addrs[NDIRECT+2]);
+    t = (uint*)tbp->data;
+
+    // for each double indirect block in triple indirect block
+    for(k = 0; k < NINDIRECT; k++){
+      if(t[k]){
+        // read double indirect block
+        dbp = bread(ip->dev, t[k]);
+        d = (uint*)dbp->data;
+
+        // for each indirect block in double indirect block
+        for(i = 0; i < NINDIRECT; i++){
+          if(d[i]){
+            // read indirect block
+            bp = bread(ip->dev, d[i]);
+            a = (uint*)bp->data;
+
+            // for each direct block in indirect bock
+            for(j = 0; j < NINDIRECT; j++){
+              // free direct block
+              if(a[j])
+                bfree(ip->dev, a[j]);
+            }
+            // free indirect block
+            brelse(bp);
+            bfree(ip->dev, d[i]);
+          }
+        }
+        // free double indirect block
+        brelse(dbp);
+        bfree(ip->dev, t[k]);
+      }
+    }
+    // free triple indirect block
+    brelse(tbp);
+    bfree(ip->dev, ip->addrs[NDIRECT+2]);
+    ip->addrs[NDIRECT+2] = 0;
   }
 
   ip->size = 0;

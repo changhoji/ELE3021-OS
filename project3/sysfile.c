@@ -327,7 +327,6 @@ sys_open(void)
   }
   iunlock(ip);
   end_op();
-
   f->type = FD_INODE;
   f->ip = ip;
   f->off = 0;
