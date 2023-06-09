@@ -131,7 +131,7 @@ sys_link(void)
   }
 
   ilock(ip);
-  if(ip->type == T_DIR){
+  if(ip->type == T_DIR || ip->type == T_SYM){
     iunlockput(ip);
     end_op();
     return -1;
@@ -160,6 +160,50 @@ bad:
   ip->nlink--;
   iupdate(ip);
   iunlockput(ip);
+  end_op();
+  return -1;
+}
+
+int
+sys_slink(void)
+{
+  char name[DIRSIZ], *new, *old;
+  struct inode *dp, *ip;
+
+  if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
+    return -1;
+
+  begin_op();
+  if((ip = namei(old)) == 0){
+    end_op();
+    return -1;
+  }
+
+  ilock(ip);
+  if(ip->type == T_DIR || ip->type == T_SYM){
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  iunlock(ip);
+
+  if((dp = nameiparent(new, name)) == 0)
+    goto bad;
+  ilock(dp);
+  if(dp->dev != ip->dev){
+    iunlockput(dp);
+    goto bad;
+  }
+  dp->slink = ip;
+  iupdate(dp);
+  iunlockput(dp);
+  iput(ip);
+
+  end_op();
+
+  return 0;
+
+bad:
   end_op();
   return -1;
 }
@@ -293,6 +337,7 @@ sys_open(void)
   int fd, omode;
   struct file *f;
   struct inode *ip;
+  // struct inode *temp;
 
   if(argstr(0, &path) < 0 || argint(1, &omode) < 0)
     return -1;
@@ -316,6 +361,11 @@ sys_open(void)
       end_op();
       return -1;
     }
+  }
+
+  
+  if(ip->type == T_SYM){
+    ip = ip->slink;
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
