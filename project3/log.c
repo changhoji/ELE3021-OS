@@ -121,6 +121,8 @@ recover_from_log(void)
   write_head(); // clear the log
 }
 
+// 10개 남은거랑은 상관없이 sync하면 해야함
+// 다 미루다가 sync하기
 // called at the start of each FS system call.
 void
 begin_op(void)
@@ -175,6 +177,7 @@ end_op(void)
   }
 }
 
+// sync 시에만 log를 쓰고 커밋해도 됨. 어차피 그전엔 안내려갈거기 때문에
 // Copy modified blocks from cache to log.
 static void
 write_log(void)

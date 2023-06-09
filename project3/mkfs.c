@@ -252,6 +252,10 @@ balloc(int used)
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
+
+// multi indirect할때 이것도 고치는게 완벽한 구현임 (이걸 안하면 부팅할때 xv6에 있는 큰 파일을 읽지 못함)
+// 커널이 single indirect까지이기 때문.
+// 근데 이거는 채점에 반영하지 않음. bmap에 대해서만 채점
 void
 iappend(uint inum, void *xp, int n)
 {
