@@ -436,7 +436,7 @@ bmap(struct inode *ip, uint bn)
     uint dindex = (bn % NDINDIRECT) / NINDIRECT;
     uint index = (bn % NDINDIRECT) % NINDIRECT;
 
-    cprintf("tindex = %d, dindex = %d, index = %d\n", tindex, dindex, index);
+    // cprintf("bn = %d, tindex = %d, dindex = %d, index = %d\n", bn, tindex, dindex, index);
 
     // allocate triple indirect block
     if((addr = ip->addrs[NDIRECT+2]) == 0)
