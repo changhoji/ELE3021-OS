@@ -25,9 +25,11 @@ int sleep(int);
 int uptime(void);
 
 int slink(const char*, const char*);
+int lsopen(const char*, int);
 
 // ulib.c
 int stat(const char*, struct stat*);
+int lsstat(const char*, struct stat*);
 char* strcpy(char*, const char*);
 void *memmove(void*, const void*, int);
 char* strchr(const char*, char c);

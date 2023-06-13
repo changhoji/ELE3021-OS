@@ -168,12 +168,14 @@ int
 sys_slink(void)
 {
   char name[DIRSIZ], *new, *old;
-  struct inode *dp, *ip;
+  struct inode *dp, *ip, *np;
 
   if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
     return -1;
 
   begin_op();
+
+  // get inode of old file
   if((ip = namei(old)) == 0){
     end_op();
     return -1;
@@ -187,23 +189,39 @@ sys_slink(void)
   }
   iunlock(ip);
 
+  // allocate inode on np
+  np = ialloc(ip->dev, T_SYM);
+  ilock(np);
+  np->nlink++;
+  strncpy(np->path, old, DIRSIZ); // set path
+  cprintf("path in slink: %s\n", np->path);
+  iupdate(np);
+  iunlock(np);
+  
+  // find directory of new file (dp)
   if((dp = nameiparent(new, name)) == 0)
     goto bad;
+  
+  // write new inode in directory..!
   ilock(dp);
-  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
+  if(dp->dev != ip->dev || dirlink(dp, name, np->inum) < 0){
     iunlockput(dp);
     goto bad;
   }
-  dp->slink = ip;
-  iupdate(dp);
+
   iunlockput(dp);
   iput(ip);
-
+  
   end_op();
 
   return 0;
 
 bad:
+  iput(ip);
+  ilock(np);
+  np->nlink--;
+  iupdate(np);
+  iunlockput(np);
   end_op();
   return -1;
 }
@@ -337,7 +355,74 @@ sys_open(void)
   int fd, omode;
   struct file *f;
   struct inode *ip;
-  // struct inode *temp;
+  struct inode *rp;
+
+  if(argstr(0, &path) < 0 || argint(1, &omode) < 0)
+    return -1;
+
+  begin_op();
+  // cprintf("[path] = %s\n", path);
+
+  if(omode & O_CREATE){
+    ip = create(path, T_FILE, 0, 0);
+    if(ip == 0){
+      end_op();
+      return -1;
+    }
+  } else {
+    if((ip = namei(path)) == 0){
+      end_op();
+      return -1;
+    }
+    // cprintf("type = %d\n", ip->type);
+    ilock(ip);  // 여기서 ilock: no type panic이 발생하는듯함
+
+    // when file is symbolic type
+    if(ip->type == T_SYM){
+      cprintf("patha = %s\n", ip->path);
+      if((rp = namei(ip->path)) == 0){
+        // failed to redirect file
+        cprintf("redirect file is not exist\n");
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      iunlockput(ip);
+      ip = rp;
+      ilock(ip);
+    }
+
+    if(ip->type == T_DIR && omode != O_RDONLY){
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+  }
+
+  if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+    if(f)
+      fileclose(f);
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  iunlock(ip);
+  end_op();
+  f->type = FD_INODE;
+  f->ip = ip;
+  f->off = 0;
+  f->readable = !(omode & O_WRONLY);
+  f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+  return fd;
+}
+
+int
+sys_lsopen(void)
+{
+  char *path;
+  int fd, omode;
+  struct file *f;
+  struct inode *ip;
 
   if(argstr(0, &path) < 0 || argint(1, &omode) < 0)
     return -1;
@@ -363,11 +448,6 @@ sys_open(void)
     }
   }
 
-  
-  if(ip->type == T_SYM){
-    ip = ip->slink;
-  }
-
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -377,6 +457,7 @@ sys_open(void)
   }
   iunlock(ip);
   end_op();
+
   f->type = FD_INODE;
   f->ip = ip;
   f->off = 0;

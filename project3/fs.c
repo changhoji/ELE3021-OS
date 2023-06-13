@@ -230,6 +230,7 @@ iupdate(struct inode *ip)
   dip->minor = ip->minor;
   dip->nlink = ip->nlink;
   dip->size = ip->size;
+  strncpy(dip->path, ip->path, DIRSIZ);
   memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
   log_write(bp);
   brelse(bp);
@@ -726,6 +727,12 @@ dirlink(struct inode *dp, char *name, uint inum)
     panic("dirlink");
 
   return 0;
+}
+
+int
+sdirlink(struct inode *dp, char *name, uint inum)
+{
+  return 1;
 }
 
 //PAGEBREAK!
