@@ -239,5 +239,5 @@ log_write(struct buf *b)
 
 int
 sync(void){
-  
+  return 1;
 }

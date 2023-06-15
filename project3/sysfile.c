@@ -164,67 +164,7 @@ bad:
   return -1;
 }
 
-int
-sys_slink(void)
-{
-  char name[DIRSIZ], *new, *old;
-  struct inode *dp, *ip, *np;
 
-  if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
-    return -1;
-
-  begin_op();
-
-  // get inode of old file
-  if((ip = namei(old)) == 0){
-    end_op();
-    return -1;
-  }
-
-  ilock(ip);
-  if(ip->type == T_DIR || ip->type == T_SYM){
-    iunlockput(ip);
-    end_op();
-    return -1;
-  }
-  iunlock(ip);
-
-  // allocate inode on np
-  np = ialloc(ip->dev, T_SYM);
-  ilock(np);
-  np->nlink++;
-  strncpy(np->path, old, DIRSIZ); // set path
-  cprintf("path in slink: %s\n", np->path);
-  iupdate(np);
-  iunlock(np);
-  
-  // find directory of new file (dp)
-  if((dp = nameiparent(new, name)) == 0)
-    goto bad;
-  
-  // write new inode in directory..!
-  ilock(dp);
-  if(dp->dev != ip->dev || dirlink(dp, name, np->inum) < 0){
-    iunlockput(dp);
-    goto bad;
-  }
-
-  iunlockput(dp);
-  iput(ip);
-  
-  end_op();
-
-  return 0;
-
-bad:
-  iput(ip);
-  ilock(np);
-  np->nlink--;
-  iupdate(np);
-  iunlockput(np);
-  end_op();
-  return -1;
-}
 
 // Is the directory dp empty except for "." and ".." ?
 static int
@@ -342,6 +282,48 @@ create(char *path, short type, short major, short minor)
   iunlockput(dp);
 
   return ip;
+}
+
+int
+sys_slink(void)
+{
+  char *new, *old;
+  struct inode *ip, *np;
+
+  if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
+    return -1;
+
+  begin_op();
+
+  // get inode of old file
+  if((ip = namei(old)) == 0){
+    end_op();
+    return -1;
+  }
+
+  ilock(ip);
+  if(ip->type == T_DIR || ip->type == T_SYM){
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  iunlock(ip);
+
+  // create inode in np
+  np = create(new, T_SYM, 0, 0);
+  if(np == 0){
+    end_op();
+    return -1;
+  }
+
+  strncpy(np->path, old, DIRSIZ); // set path
+  // cprintf("path in slink: %s\n", np->path);
+  iupdate(np);
+  iunlockput(np);
+  
+  end_op();
+
+  return 0;
 }
 
 // 여기서 (symbolic link)
