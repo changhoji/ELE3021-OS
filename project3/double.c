@@ -6,7 +6,7 @@
 int
 main(int argc, char *argv[])
 {
-  int datasize = 16*1024*1024;
+  int datasize = 1*1024*1024;
   uint written = 0;
   char buf[BUFFERSIZE];
   int fd = open("double.txt", 0x200 | 0x002);
@@ -17,6 +17,7 @@ main(int argc, char *argv[])
   }
 
   int cnt = 0;
+  int time = uptime();
   while(written < datasize){
     uint temp = write(fd, buf, BUFFERSIZE);
     if(temp == -1){
@@ -29,7 +30,7 @@ main(int argc, char *argv[])
       printf(1, "write success: + %d.. => %d\n", temp, written);
   }
 
-  printf(1, "written = %d bytes\n", written);
+  printf(1, "written = %d bytes | taken time: %d ticks\n", written, uptime()-time);
 
   if(close(fd) == -1){
     printf(2, "failed to close file\n");

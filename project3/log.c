@@ -121,22 +121,20 @@ recover_from_log(void)
   write_head(); // clear the log
 }
 
-// 10개 남은거랑은 상관없이 sync하면 해야함
-// 다 미루다가 sync하기
 // called at the start of each FS system call.
 void
 begin_op(void)
 {
   acquire(&log.lock);
   while(1){
-    if(log.committing){ // commit중인가?
+    if(log.committing){
       sleep(&log, &log.lock);
-    } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){ // log에 쓸 수 있는 상태인가?
+    } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
       // this op might exhaust log space; wait for commit.
       sleep(&log, &log.lock);
     } else {
-      log.outstanding += 1; // 이제부터 file system에 뭔갈 쓰겠다는 뜻
-      release(&log.lock);   // 그 후부터 다른 process에선 begin_op를 하면 sleep됨
+      log.outstanding += 1;
+      release(&log.lock);
       break;
     }
   }
@@ -153,23 +151,20 @@ end_op(void)
   log.outstanding -= 1;
   if(log.committing)
     panic("log.committing");
-  if(log.outstanding == 0){
-    do_commit = 1;
-    log.committing = 1;
-  } else {
+  
+  if(log.outstanding > 0){
     // begin_op() may be waiting for log space,
     // and decrementing log.outstanding has decreased
     // the amount of reserved space.
     wakeup(&log);
+  }else if(log.lh.n + MAXOPBLOCKS > LOGSIZE){
+    do_commit = 1;
+    log.committing = 1;
   }
   release(&log.lock);
-  // buffer -> log -> disk
-  // buffer -> disk (when sync())
-  // 아래를 지우고 begin_op할때 버퍼가 부족한지 확인해 sync를 호출하던가 하고, sync하면 아래를 실행
+
   if(do_commit){
-    // call commit w/o holding locks, since not allowed
-    // to sleep with locks.
-    commit(); // 여기서 data가 flush됨
+    sync();
     acquire(&log.lock);
     log.committing = 0;
     wakeup(&log);
@@ -177,7 +172,6 @@ end_op(void)
   }
 }
 
-// sync 시에만 log를 쓰고 커밋해도 됨. 어차피 그전엔 안내려갈거기 때문에
 // Copy modified blocks from cache to log.
 static void
 write_log(void)
@@ -238,6 +232,9 @@ log_write(struct buf *b)
 }
 
 int
-sync(void){
-  return 1;
+sync(void)
+{
+  int n = log.lh.n;
+  commit();
+  return n;
 }
