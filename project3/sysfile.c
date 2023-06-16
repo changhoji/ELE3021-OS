@@ -302,14 +302,14 @@ sys_slink(void)
   }
 
   ilock(ip);
-  if(ip->type == T_DIR || ip->type == T_SYM){
+  if(ip->type == T_DIR){
     iunlockput(ip);
     end_op();
     return -1;
   }
   iunlock(ip);
 
-  // create inode in np
+  // create inode which is symbolic link file in np
   np = create(new, T_SYM, 0, 0);
   if(np == 0){
     end_op();
@@ -317,7 +317,6 @@ sys_slink(void)
   }
 
   strncpy(np->path, old, DIRSIZ); // set path
-  // cprintf("path in slink: %s\n", np->path);
   iupdate(np);
   iunlockput(np);
   
@@ -326,10 +325,6 @@ sys_slink(void)
   return 0;
 }
 
-// 여기서 (symbolic link)
-// if type == "symbolic" {
-//    sys_open(symbolic->link);
-//}
 int
 sys_open(void)
 {
@@ -343,7 +338,6 @@ sys_open(void)
     return -1;
 
   begin_op();
-  // cprintf("[path] = %s\n", path);
 
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
@@ -356,12 +350,11 @@ sys_open(void)
       end_op();
       return -1;
     }
-    // cprintf("type = %d\n", ip->type);
-    ilock(ip);  // 여기서 ilock: no type panic이 발생하는듯함
+    ilock(ip);
 
     // when file is symbolic type
-    if(ip->type == T_SYM){
-      cprintf("patha = %s\n", ip->path);
+    while(ip->type == T_SYM){
+      // re-open redirecting file
       if((rp = namei(ip->path)) == 0){
         // failed to redirect file
         cprintf("redirect file is not exist\n");

@@ -29,8 +29,11 @@ main(int argc, char *argv[])
     }
     written += temp;
     cnt++;
-    if(cnt % 50 == 0)
-      printf(1, "write success: + %d.. => %d\n", temp, written);
+    if(cnt % 3 == 0){
+      printf(1, "sync returned %d\n", sync());
+    }
+    // if(cnt % 50 == 0)
+      // printf(1, "write success: + %d.. => %d\n", temp, written);
   }
 
   if(flag){

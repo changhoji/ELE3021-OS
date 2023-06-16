@@ -230,7 +230,7 @@ iupdate(struct inode *ip)
   dip->minor = ip->minor;
   dip->nlink = ip->nlink;
   dip->size = ip->size;
-  strncpy(dip->path, ip->path, DIRSIZ);
+  // strncpy(dip->path, ip->path, DIRSIZ);
   memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
   log_write(bp);
   brelse(bp);

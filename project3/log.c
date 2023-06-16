@@ -157,18 +157,13 @@ end_op(void)
     // and decrementing log.outstanding has decreased
     // the amount of reserved space.
     wakeup(&log);
-  }else if(log.lh.n + MAXOPBLOCKS > LOGSIZE){
+  } else if(log.lh.n + MAXOPBLOCKS > LOGSIZE){ // if sync is needed
     do_commit = 1;
-    log.committing = 1;
   }
   release(&log.lock);
 
   if(do_commit){
     sync();
-    acquire(&log.lock);
-    log.committing = 0;
-    wakeup(&log);
-    release(&log.lock);
   }
 }
 
@@ -191,6 +186,7 @@ write_log(void)
 static void
 commit()
 {
+  cprintf("commit!\n");
   if (log.lh.n > 0) {
     write_log();     // Write modified blocks from cache to log
     write_head();    // Write header to disk -- the real commit
@@ -235,6 +231,17 @@ int
 sync(void)
 {
   int n = log.lh.n;
+
+  acquire(&log.lock);
+  log.committing = 1;
+  release(&log.lock);
+
   commit();
+
+  acquire(&log.lock);
+  log.committing = 0;
+  wakeup(&log);
+  release(&log.lock);
+
   return n;
 }
