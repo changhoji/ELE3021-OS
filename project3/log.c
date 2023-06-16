@@ -186,7 +186,6 @@ write_log(void)
 static void
 commit()
 {
-  cprintf("commit!\n");
   if (log.lh.n > 0) {
     write_log();     // Write modified blocks from cache to log
     write_head();    // Write header to disk -- the real commit
