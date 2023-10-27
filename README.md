@@ -6,8 +6,8 @@
 ## Projects
 
 - [Project1 - MLFQ Scheduler](/project1/README.md)
-- [Project2 - Process Management & LWP](/project2)
-- Project3 - Multi Indirect & Symbolic Link
+- [Project2 - Process Management & LWP](/project2/README.md)
+- [Project3 - Multi Indirect & Symbolic Link](/project3/README.md)
 
 ## Environment
 
